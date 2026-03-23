@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ForceGraph2D from 'react-force-graph-2d';
 import { useAuth } from '../hooks/useAuth';
 import api from '../api/client';
 
-type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages';
+type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph';
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -12,6 +13,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'users', label: 'Users' },
   { key: 'content', label: 'Content' },
   { key: 'groups-pages', label: 'Groups & Pages' },
+  { key: 'graph', label: 'Graph Explorer' },
 ];
 
 export default function AdminPage() {
@@ -71,6 +73,7 @@ export default function AdminPage() {
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'content' && <ContentTab />}
       {activeTab === 'groups-pages' && <GroupsPagesTab />}
+      {activeTab === 'graph' && <GraphExplorerTab />}
     </div>
   );
 }
@@ -1091,6 +1094,786 @@ function BarChart({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ────────────────────────── Graph Explorer Tab ────────────────────────── */
+
+function UserPicker({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const { data: results } = useQuery<{ id: number; username: string; displayName: string; avatarUrl: string | null }[]>({
+    queryKey: ['user-picker-search', search],
+    queryFn: () => api.get('/users/search', { params: { q: search } }).then(r => r.data),
+    enabled: search.length >= 1 && open,
+    staleTime: 10000,
+  });
+
+  return (
+    <div className="relative flex-1 min-w-[200px]">
+      <input
+        value={open ? search : (value ? `${value}` : '')}
+        onChange={e => { setSearch(e.target.value); setOpen(true); onChange(e.target.value); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder={placeholder}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+      />
+      {open && results && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+          {results.slice(0, 10).map(user => (
+            <button key={user.id} type="button"
+              onMouseDown={e => { e.preventDefault(); onChange(String(user.id)); setSearch(user.displayName + ' (' + user.username + ')'); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 text-left">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} className="w-7 h-7 rounded-full" alt="" />
+              ) : (
+                <div className="w-7 h-7 bg-primary-400 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                  {user.displayName?.[0]?.toUpperCase() ?? '?'}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-gray-900 truncate">{user.displayName}</div>
+                <div className="text-xs text-gray-400">@{user.username}</div>
+              </div>
+              <span className="text-[10px] text-gray-300 font-mono">{user.id}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GraphExplorerTab() {
+  const [nodeId, setNodeId] = useState('');
+  const [edgeType, setEdgeType] = useState('FOLLOWS');
+  const [activeSection, setActiveSection] = useState<'profile' | 'neighbors' | 'fof' | 'mutual' | 'traverse'>('profile');
+
+  // User search for picking IDs
+  const [userSearch, setUserSearch] = useState('');
+  const { data: searchResults } = useQuery<{ id: number; username: string; displayName: string; avatarUrl: string | null }[]>({
+    queryKey: ['admin-user-search', userSearch],
+    queryFn: () => api.get('/users/search', { params: { q: userSearch } }).then(r => r.data),
+    enabled: userSearch.length >= 2,
+    staleTime: 10000,
+  });
+
+  // FOF state
+  const [fofSource, setFofSource] = useState('');
+  const [fofEdgeType, setFofEdgeType] = useState('FOLLOWS');
+  const [fofMaxResults, setFofMaxResults] = useState(20);
+
+  // Mutual friends state
+  const [mutualUser1, setMutualUser1] = useState('');
+  const [mutualUser2, setMutualUser2] = useState('');
+  const [mutualEdgeType, setMutualEdgeType] = useState('FOLLOWS');
+
+  // Traverse state
+  const [traverseDepth, setTraverseDepth] = useState(2);
+
+  // Backfill mutation
+  const backfill = useMutation({
+    mutationFn: () => api.post('/admin/graph/backfill').then(r => r.data),
+  });
+
+  const EDGE_TYPES = ['FOLLOWS', 'LIKES', 'AUTHORED', 'MEMBER_OF', 'CONTAINS'];
+
+  // Node profile query
+  const { data: profile, isFetching: profileLoading } = useQuery<{
+    nodeId: string; edgeCounts: Record<string, number>;
+    username?: string; displayName?: string; avatarUrl?: string;
+  }>({
+    queryKey: ['graph-profile', nodeId],
+    queryFn: () => api.get(`/admin/graph/profile/${nodeId}`).then(r => r.data),
+    enabled: !!nodeId && activeSection === 'profile',
+  });
+
+  // Neighbors query
+  const { data: neighbors, isFetching: neighborsLoading } = useQuery<{
+    neighbors: { id: string; username?: string; displayName?: string; avatarUrl?: string }[];
+    count: number;
+  }>({
+    queryKey: ['graph-neighbors', nodeId, edgeType],
+    queryFn: () => api.get(`/admin/graph/neighbors/${nodeId}/${edgeType}`).then(r => r.data),
+    enabled: !!nodeId && activeSection === 'neighbors',
+  });
+
+  // FOF query
+  const fofQuery = useMutation({
+    mutationFn: (body: { sourceId: string; edgeType: string; maxResults: number }) =>
+      api.post('/admin/graph/fof', body).then(r => r.data),
+  });
+
+  // Mutual friends query
+  const mutualQuery = useMutation({
+    mutationFn: (body: { userId1: string; userId2: string; edgeType: string }) =>
+      api.post('/admin/graph/mutual-friends', body).then(r => r.data),
+  });
+
+  // Traverse query
+  const { data: traverseData, isFetching: traverseLoading } = useQuery<{
+    nodes: { id: string; username?: string; displayName?: string; avatarUrl?: string }[];
+    edges: { src: string; dst: string; edgeType: string }[];
+    root: string;
+  }>({
+    queryKey: ['graph-traverse', nodeId, edgeType, traverseDepth],
+    queryFn: () => api.get(`/admin/graph/traverse/${nodeId}/${edgeType}`, {
+      params: { depth: traverseDepth, maxPerHop: 20 }
+    }).then(r => r.data),
+    enabled: !!nodeId && activeSection === 'traverse',
+  });
+
+  // AOEE stats
+  const { data: aoeeStats } = useQuery<{ available: boolean; [key: string]: unknown }>({
+    queryKey: ['aoee-stats'],
+    queryFn: () => api.get('/admin/graph/stats').then(r => r.data),
+    staleTime: 10000,
+  });
+
+  const sectionBtns: { key: typeof activeSection; label: string }[] = [
+    { key: 'profile', label: 'Node Profile' },
+    { key: 'neighbors', label: 'Neighbors' },
+    { key: 'fof', label: 'Friend of Friend' },
+    { key: 'mutual', label: 'Mutual Friends' },
+    { key: 'traverse', label: 'Graph Traverse' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* AOEE Status + Backfill */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className={`px-4 py-2 rounded-lg text-sm font-medium flex-1 ${aoeeStats?.available ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+          AOEE Graph Cache: {aoeeStats?.available ? 'Connected' : 'Unavailable (queries will use DB fallback)'}
+        </div>
+        <button
+          onClick={() => backfill.mutate()}
+          disabled={backfill.isPending}
+          className="px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 disabled:opacity-50 shrink-0"
+        >
+          {backfill.isPending ? 'Loading data...' : 'Load DB into AOEE'}
+        </button>
+      </div>
+      {backfill.data && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 text-sm">
+          <div className="font-medium text-indigo-900 mb-2">Backfill complete: {backfill.data.totalEdges} edges loaded</div>
+          <div className="flex gap-4 flex-wrap text-indigo-700">
+            {Object.entries(backfill.data.edgesByType as Record<string, number>).map(([type, count]) => (
+              <span key={type}>{type}: <strong>{count}</strong></span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Section selector */}
+      <div className="flex gap-2 flex-wrap">
+        {sectionBtns.map(s => (
+          <button key={s.key} onClick={() => setActiveSection(s.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeSection === s.key ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Node Profile ── */}
+      {activeSection === 'profile' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Node Profile</h3>
+          <p className="text-sm text-gray-500">Look up a user or entity by ID to see their graph connections.</p>
+          <div className="flex gap-3">
+            <UserPicker value={nodeId} onChange={setNodeId} placeholder="Search user or enter ID..." />
+          </div>
+          {profileLoading && <div className="text-sm text-gray-400">Loading...</div>}
+          {profile && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} className="w-12 h-12 rounded-full" alt="" />
+                ) : (
+                  <div className="w-12 h-12 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">
+                    {profile.displayName?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                )}
+                <div>
+                  <div className="font-semibold text-gray-900">{profile.displayName ?? 'Unknown Entity'}</div>
+                  {profile.username && <div className="text-sm text-gray-500">@{profile.username}</div>}
+                  <div className="text-xs text-gray-400 font-mono">ID: {profile.nodeId}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {Object.entries(profile.edgeCounts).map(([type, count]) => (
+                  <button key={type} onClick={() => { setEdgeType(type); setActiveSection('neighbors'); }}
+                    className="p-3 bg-white border border-gray-200 rounded-lg hover:border-primary-300 hover:shadow-sm transition-all text-center cursor-pointer">
+                    <div className="text-2xl font-bold text-primary-600">{count}</div>
+                    <div className="text-xs text-gray-500 font-medium">{type}</div>
+                  </button>
+                ))}
+                {Object.keys(profile.edgeCounts).length === 0 && (
+                  <div className="col-span-full text-sm text-gray-400 italic">No edges found in AOEE for this node</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Neighbors ── */}
+      {activeSection === 'neighbors' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Neighbor Explorer</h3>
+          <div className="flex gap-3 flex-wrap">
+            <UserPicker value={nodeId} onChange={setNodeId} placeholder="Search user or enter ID..." />
+            <select value={edgeType} onChange={e => setEdgeType(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              {EDGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          {neighborsLoading && <div className="text-sm text-gray-400">Loading...</div>}
+          {neighbors && (
+            <>
+              <div className="text-sm text-gray-500">{neighbors.count} neighbor{neighbors.count !== 1 ? 's' : ''} via <span className="font-mono text-primary-600">{edgeType}</span></div>
+              <div className="grid gap-2 max-h-96 overflow-y-auto">
+                {neighbors.neighbors.map(n => (
+                  <div key={n.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    {n.avatarUrl ? (
+                      <img src={n.avatarUrl} className="w-8 h-8 rounded-full" alt="" />
+                    ) : (
+                      <div className="w-8 h-8 bg-gray-400 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                        {n.displayName?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{n.displayName ?? 'Unknown'}</div>
+                      {n.username && <div className="text-xs text-gray-500">@{n.username}</div>}
+                    </div>
+                    <button onClick={() => { setNodeId(String(n.id)); setActiveSection('profile'); }}
+                      className="text-xs text-primary-500 hover:underline shrink-0">Explore</button>
+                    <span className="text-xs text-gray-400 font-mono shrink-0">{n.id}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Friend of Friend ── */}
+      {activeSection === 'fof' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Friend of Friend</h3>
+          <p className="text-sm text-gray-500">Find users connected through mutual connections. Higher scores mean more mutual connections.</p>
+          <div className="flex gap-3 flex-wrap">
+            <UserPicker value={fofSource} onChange={setFofSource} placeholder="Search source user..." />
+            <select value={fofEdgeType} onChange={e => setFofEdgeType(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              {EDGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input type="number" value={fofMaxResults} onChange={e => setFofMaxResults(Number(e.target.value))}
+              className="w-24 px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Max" />
+            <button onClick={() => fofQuery.mutate({ sourceId: fofSource, edgeType: fofEdgeType, maxResults: fofMaxResults })}
+              disabled={!fofSource || fofQuery.isPending}
+              className="px-6 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50">
+              {fofQuery.isPending ? 'Querying...' : 'Find FOF'}
+            </button>
+          </div>
+          {fofQuery.data && (
+            <div className="space-y-3">
+              {fofQuery.data.elapsedMs != null && (
+                <div className="text-xs text-gray-400">Query completed in {fofQuery.data.elapsedMs}ms</div>
+              )}
+              {fofQuery.data.error && (
+                <div className="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-lg">AOEE Error: {fofQuery.data.error}</div>
+              )}
+              <div className="grid gap-2 max-h-96 overflow-y-auto">
+                {(fofQuery.data.candidates ?? []).map((c: { id: string; score?: number; displayName?: string; username?: string; avatarUrl?: string }) => (
+                  <div key={c.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    {c.avatarUrl ? (
+                      <img src={c.avatarUrl} className="w-8 h-8 rounded-full" alt="" />
+                    ) : (
+                      <div className="w-8 h-8 bg-indigo-400 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                        {c.displayName?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{c.displayName ?? 'Unknown'}</div>
+                      {c.username && <div className="text-xs text-gray-500">@{c.username}</div>}
+                    </div>
+                    {c.score != null && (
+                      <div className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-xs font-mono">
+                        score: {Number(c.score).toFixed(2)}
+                      </div>
+                    )}
+                    <button onClick={() => { setNodeId(String(c.id)); setActiveSection('profile'); }}
+                      className="text-xs text-primary-500 hover:underline">Explore</button>
+                  </div>
+                ))}
+                {(fofQuery.data.candidates ?? []).length === 0 && !fofQuery.data.error && (
+                  <div className="text-sm text-gray-400 italic">No friend-of-friend candidates found</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Mutual Friends ── */}
+      {activeSection === 'mutual' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Mutual Friends</h3>
+          <p className="text-sm text-gray-500">Find shared connections between two users.</p>
+          <div className="flex gap-3 flex-wrap">
+            <UserPicker value={mutualUser1} onChange={setMutualUser1} placeholder="Search user 1..." />
+            <UserPicker value={mutualUser2} onChange={setMutualUser2} placeholder="Search user 2..." />
+            <select value={mutualEdgeType} onChange={e => setMutualEdgeType(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              {EDGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <button onClick={() => mutualQuery.mutate({ userId1: mutualUser1, userId2: mutualUser2, edgeType: mutualEdgeType })}
+              disabled={!mutualUser1 || !mutualUser2 || mutualQuery.isPending}
+              className="px-6 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50">
+              {mutualQuery.isPending ? 'Querying...' : 'Find Mutual'}
+            </button>
+          </div>
+          {mutualQuery.data && (
+            <div className="space-y-3">
+              {mutualQuery.data.user1 && mutualQuery.data.user2 && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span className="font-medium">{mutualQuery.data.user1.displayName}</span>
+                  <span className="text-gray-400">&amp;</span>
+                  <span className="font-medium">{mutualQuery.data.user2.displayName}</span>
+                </div>
+              )}
+              {mutualQuery.data.error && (
+                <div className="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-lg">AOEE Error: {mutualQuery.data.error}</div>
+              )}
+              <div className="grid gap-2 max-h-96 overflow-y-auto">
+                {(mutualQuery.data.mutualFriends ?? []).map((f: { id: string; displayName?: string; username?: string; avatarUrl?: string }) => (
+                  <div key={f.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    {f.avatarUrl ? (
+                      <img src={f.avatarUrl} className="w-8 h-8 rounded-full" alt="" />
+                    ) : (
+                      <div className="w-8 h-8 bg-emerald-400 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                        {f.displayName?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{f.displayName ?? 'Unknown'}</div>
+                      {f.username && <div className="text-xs text-gray-500">@{f.username}</div>}
+                    </div>
+                    <button onClick={() => { setNodeId(String(f.id)); setActiveSection('profile'); }}
+                      className="text-xs text-primary-500 hover:underline">Explore</button>
+                  </div>
+                ))}
+                {(mutualQuery.data.mutualFriends ?? []).length === 0 && !mutualQuery.data.error && (
+                  <div className="text-sm text-gray-400 italic">No mutual friends found</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Graph Traverse + Visualization ── */}
+      {activeSection === 'traverse' && (
+        <GraphVisualizer
+          nodeId={nodeId}
+          setNodeId={setNodeId}
+          edgeType={edgeType}
+          setEdgeType={setEdgeType}
+          traverseDepth={traverseDepth}
+          setTraverseDepth={setTraverseDepth}
+          setActiveSection={setActiveSection}
+          EDGE_TYPES={EDGE_TYPES}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────── Graph Visualizer ────────────────────────── */
+
+const EDGE_COLORS: Record<string, string> = {
+  FOLLOWS: '#4fc3f7',
+  LIKES: '#ff7043',
+  AUTHORED: '#ffa726',
+  MEMBER_OF: '#ab47bc',
+  CONTAINS: '#26a69a',
+};
+
+function GraphVisualizer({
+  nodeId, setNodeId, edgeType, setEdgeType,
+  traverseDepth, setTraverseDepth, setActiveSection, EDGE_TYPES,
+}: {
+  nodeId: string; setNodeId: (v: string) => void;
+  edgeType: string; setEdgeType: (v: string) => void;
+  traverseDepth: number; setTraverseDepth: (v: number) => void;
+  setActiveSection: (v: 'profile' | 'neighbors' | 'fof' | 'mutual' | 'traverse') => void;
+  EDGE_TYPES: string[];
+}) {
+  const graphRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [selectedEdgeTypes, setSelectedEdgeTypes] = useState<string[]>([edgeType]);
+  const [graphHeight, setGraphHeight] = useState(700);
+  const [graphWidth, setGraphWidth] = useState(800);
+  const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] });
+  const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Measure container width
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setGraphWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Escape key exits fullscreen
+  useEffect(() => {
+    if (!fullscreen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [fullscreen]);
+
+  // Traverse query
+  const { data: traverseData, isFetching: traverseLoading } = useQuery<{
+    nodes: { id: string; username?: string; displayName?: string; avatarUrl?: string }[];
+    edges: { src: string; dst: string; edgeType: string }[];
+    root: string;
+  }>({
+    queryKey: ['graph-traverse', nodeId, selectedEdgeTypes.join(','), traverseDepth],
+    queryFn: async () => {
+      // Fetch for each selected edge type and merge
+      const allNodes = new Map<string, any>();
+      const allEdges: any[] = [];
+      const edgeSet = new Set<string>();
+      for (const et of selectedEdgeTypes) {
+        const { data } = await api.get(`/admin/graph/traverse/${nodeId}/${et}`, {
+          params: { depth: traverseDepth, maxPerHop: 30 },
+        });
+        for (const n of data.nodes) allNodes.set(String(n.id), n);
+        for (const e of data.edges) {
+          const key = `${e.src}-${e.dst}-${e.edgeType}`;
+          if (!edgeSet.has(key)) { edgeSet.add(key); allEdges.push(e); }
+        }
+      }
+      return { nodes: Array.from(allNodes.values()), edges: allEdges, root: nodeId };
+    },
+    enabled: !!nodeId && selectedEdgeTypes.length > 0,
+  });
+
+  // Convert traverse data to force graph format
+  useEffect(() => {
+    if (!traverseData) return;
+    const nodes = traverseData.nodes.map(n => ({
+      id: String(n.id),
+      label: n.displayName || n.username || String(n.id),
+      username: n.username,
+      displayName: n.displayName,
+      avatarUrl: n.avatarUrl,
+      isRoot: String(n.id) === String(traverseData.root),
+    }));
+    const links = traverseData.edges.map(e => ({
+      source: String(e.src),
+      target: String(e.dst),
+      type: e.edgeType,
+    }));
+    setGraphData({ nodes, links });
+  }, [traverseData]);
+
+  // Zoom to fit when graph data changes
+  useEffect(() => {
+    if (graphData.nodes.length > 0 && graphRef.current) {
+      const timer = setTimeout(() => graphRef.current?.zoomToFit(400, 60), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [graphData]);
+
+  const handleNodeClick = useCallback((node: any) => {
+    setSelectedNode(node);
+  }, []);
+
+  const toggleEdgeType = (type: string) => {
+    setSelectedEdgeTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+  };
+
+  const edgeCounts = graphData.links.reduce((acc: Record<string, number>, link: any) => {
+    acc[link.type] = (acc[link.type] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Network Graph</h3>
+        <p className="text-sm text-gray-500">Interactive force-directed visualization. Click nodes to inspect, double-click to re-center.</p>
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-xs text-gray-500 mb-1 block">Starting User</label>
+            <UserPicker value={nodeId} onChange={setNodeId} placeholder="Search user..." />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Depth</label>
+            <select value={traverseDepth} onChange={e => setTraverseDepth(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              {[1, 2, 3].map(d => <option key={d} value={d}>{d} hop{d > 1 ? 's' : ''}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Edge type toggles */}
+        <div>
+          <label className="text-xs text-gray-500 mb-2 block">Edge Types</label>
+          <div className="flex flex-wrap gap-2">
+            {EDGE_TYPES.map(type => (
+              <button key={type} onClick={() => toggleEdgeType(type)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                style={{
+                  backgroundColor: selectedEdgeTypes.includes(type) ? EDGE_COLORS[type] ?? '#999' : 'white',
+                  color: selectedEdgeTypes.includes(type) ? 'white' : '#666',
+                  borderColor: selectedEdgeTypes.includes(type) ? 'transparent' : '#ddd',
+                }}>
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Force graph — inline or fullscreen */}
+      <GraphCanvas
+        fullscreen={fullscreen}
+        setFullscreen={setFullscreen}
+        graphRef={graphRef}
+        containerRef={containerRef}
+        graphData={graphData}
+        graphWidth={graphWidth}
+        graphHeight={graphHeight}
+        setGraphHeight={setGraphHeight}
+        traverseLoading={traverseLoading}
+        nodeId={nodeId}
+        selectedNode={selectedNode}
+        setSelectedNode={handleNodeClick}
+        setNodeId={setNodeId}
+        edgeCounts={edgeCounts}
+      />
+
+      {/* Selected node detail */}
+      {selectedNode && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            {selectedNode.avatarUrl ? (
+              <img src={selectedNode.avatarUrl} className="w-10 h-10 rounded-full" alt="" />
+            ) : (
+              <div className="w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                {selectedNode.displayName?.[0]?.toUpperCase() ?? '?'}
+              </div>
+            )}
+            <div className="flex-1">
+              <div className="font-medium text-gray-900">{selectedNode.displayName ?? selectedNode.id}</div>
+              {selectedNode.username && <div className="text-xs text-gray-500">@{selectedNode.username}</div>}
+              <div className="text-xs text-gray-400 font-mono">{selectedNode.id}</div>
+            </div>
+            <button onClick={() => { setNodeId(String(selectedNode.id)); setSelectedNode(null); }}
+              className="px-3 py-1.5 bg-primary-50 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-100">
+              Re-center on this node
+            </button>
+            <button onClick={() => { setNodeId(String(selectedNode.id)); setActiveSection('profile'); }}
+              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200">
+              View Profile
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────── Graph Canvas (inline + fullscreen) ────────────────────────── */
+
+function GraphCanvas({
+  fullscreen, setFullscreen, graphRef, containerRef,
+  graphData, graphWidth, graphHeight, setGraphHeight,
+  traverseLoading, nodeId, selectedNode, setSelectedNode, setNodeId, edgeCounts,
+}: {
+  fullscreen: boolean; setFullscreen: (v: boolean) => void;
+  graphRef: React.MutableRefObject<any>; containerRef: React.RefObject<any>;
+  graphData: { nodes: any[]; links: any[] };
+  graphWidth: number; graphHeight: number; setGraphHeight: (v: number) => void;
+  traverseLoading: boolean; nodeId: string;
+  selectedNode: any; setSelectedNode: (n: any) => void;
+  setNodeId: (v: string) => void; edgeCounts: Record<string, number>;
+}) {
+  const w = fullscreen ? window.innerWidth : graphWidth;
+  const h = fullscreen ? window.innerHeight : graphHeight;
+
+  // Re-fit when toggling fullscreen
+  useEffect(() => {
+    if (graphData.nodes.length > 0 && graphRef.current) {
+      setTimeout(() => graphRef.current?.zoomToFit(300, 60), 200);
+    }
+  }, [fullscreen, graphData.nodes.length, graphRef]);
+
+  const graphContent = (
+    <>
+      {traverseLoading && (
+        <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
+          <div className="text-sm text-gray-500">Loading graph...</div>
+        </div>
+      )}
+      {graphData.nodes.length > 0 ? (
+        <>
+          <ForceGraph2D
+            ref={graphRef}
+            graphData={graphData}
+            width={w}
+            height={h}
+            nodeLabel={(node: any) => `${node.displayName || node.id}\n@${node.username || '?'}`}
+            nodeColor={(node: any) => node.isRoot ? '#ef4444' : '#60a5fa'}
+            linkColor={(link: any) => EDGE_COLORS[link.type] ?? '#999'}
+            linkWidth={2}
+            linkDirectionalArrowLength={6}
+            linkDirectionalArrowRelPos={1}
+            linkDirectionalArrowColor={(link: any) => EDGE_COLORS[link.type] ?? '#999'}
+            onNodeClick={setSelectedNode}
+            onNodeRightClick={(node: any) => { setNodeId(String(node.id)); }}
+            nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+              const size = node.isRoot ? 8 : 5;
+              const x = node.x ?? 0;
+              const y = node.y ?? 0;
+              ctx.fillStyle = node.isRoot ? '#ef4444' : (node.id === selectedNode?.id ? '#2563eb' : '#60a5fa');
+              ctx.beginPath();
+              ctx.arc(x, y, size, 0, 2 * Math.PI);
+              ctx.fill();
+              if (node.isRoot) {
+                ctx.strokeStyle = '#b91c1c';
+                ctx.lineWidth = 2 / globalScale;
+                ctx.stroke();
+              }
+              const label = node.displayName || node.username || node.id;
+              const fontSize = Math.max(11 / globalScale, 3);
+              ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+              ctx.fillStyle = '#1f2937';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(label, x + size + 3, y);
+            }}
+            linkCanvasObjectMode={() => 'after'}
+            linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+              const start = link.source;
+              const end = link.target;
+              if (!start.x || !end.x) return;
+              const fontSize = Math.max(8 / globalScale, 2);
+              ctx.font = `${fontSize}px sans-serif`;
+              ctx.fillStyle = EDGE_COLORS[link.type] ?? '#999';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(link.type, (start.x + end.x) / 2, (start.y + end.y) / 2);
+            }}
+          />
+
+          {/* Legend */}
+          <div className="absolute bottom-4 right-4 bg-white/95 rounded-lg shadow-md px-3 py-2 text-xs">
+            <div className="font-semibold text-gray-700 mb-1.5">Legend</div>
+            {Object.entries(edgeCounts).map(([type, count]) => (
+              <div key={type} className="flex items-center gap-2 mb-1">
+                <div className="w-3 h-0.5 rounded" style={{ backgroundColor: EDGE_COLORS[type] ?? '#999' }} />
+                <span className="text-gray-600">{type}</span>
+                <span className="text-gray-400">({count})</span>
+              </div>
+            ))}
+            <div className="border-t border-gray-200 mt-1.5 pt-1.5 space-y-1">
+              <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-gray-600">Root</span></div>
+              <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-blue-400" /><span className="text-gray-600">Other</span></div>
+            </div>
+          </div>
+
+          {/* Top bar: stats + controls */}
+          <div className="absolute top-3 left-3 bg-white/95 rounded-lg shadow-md px-3 py-2 text-xs flex gap-3 items-center">
+            <span className="text-gray-600"><strong>{graphData.nodes.length}</strong> nodes</span>
+            <span className="text-gray-600"><strong>{graphData.links.length}</strong> edges</span>
+            <span className="text-gray-300">|</span>
+            <button onClick={() => graphRef.current?.zoomToFit(300, 50)}
+              className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium">
+              Fit
+            </button>
+            <button onClick={() => { setFullscreen(!fullscreen); }}
+              className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium">
+              {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            </button>
+          </div>
+
+          {/* Selected node popover in fullscreen */}
+          {fullscreen && selectedNode && (
+            <div className="absolute bottom-4 left-4 bg-white/95 rounded-lg shadow-lg px-4 py-3 max-w-xs">
+              <div className="flex items-center gap-3">
+                {selectedNode.avatarUrl ? (
+                  <img src={selectedNode.avatarUrl} className="w-9 h-9 rounded-full" alt="" />
+                ) : (
+                  <div className="w-9 h-9 bg-primary-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                    {selectedNode.displayName?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-medium text-gray-900">{selectedNode.displayName ?? selectedNode.id}</div>
+                  {selectedNode.username && <div className="text-xs text-gray-500">@{selectedNode.username}</div>}
+                  <div className="text-[10px] text-gray-400 font-mono">{selectedNode.id}</div>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setNodeId(String(selectedNode.id))}
+                  className="px-2 py-1 bg-primary-50 text-primary-600 rounded text-xs font-medium hover:bg-primary-100">
+                  Re-center
+                </button>
+                <button onClick={() => setSelectedNode(null)}
+                  className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium hover:bg-gray-200">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+          {nodeId ? 'Select edge types to visualize' : 'Search for a user and select edge types to explore the network'}
+        </div>
+      )}
+    </>
+  );
+
+  if (fullscreen) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-white" ref={containerRef}>
+        {graphContent}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="bg-white border border-gray-200 rounded-xl overflow-hidden relative" style={{ height: graphHeight }}>
+      {graphContent}
+      {/* Resize handle (inline only) */}
+      <div className="absolute bottom-0 left-0 right-0 h-4 cursor-ns-resize flex justify-center items-center bg-gradient-to-b from-transparent to-gray-200/60 hover:to-gray-300/80 transition-colors"
+        onMouseDown={e => {
+          e.preventDefault();
+          const startY = e.clientY;
+          const startH = graphHeight;
+          const onMove = (ev: MouseEvent) => setGraphHeight(Math.max(300, Math.min(window.innerHeight - 100, startH + ev.clientY - startY)));
+          const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        }}>
+        <div className="w-16 h-1.5 bg-gray-400 rounded-full" />
+      </div>
     </div>
   );
 }

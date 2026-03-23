@@ -55,14 +55,13 @@ services:
     container_name: social-aoee
     environment:
       AOEE_LISTEN_ADDR: "0.0.0.0:50051"
-      AOEE_STORAGE_TYPE: http
-      AOEE_HTTP_URL: "http://host.docker.internal:8080"
-      AOEE_WRITE_THROUGH: "true"
+      AOEE_STORAGE_TYPE: memory
+      AOEE_WRITE_THROUGH: "false"
       RUST_LOG: info,aoee_storage=debug
     ports:
       - "50051:50051"
     extra_hosts:
-      - "host.docker.internal:192.168.1.145"
+      - "host.docker.internal:10.0.0.25"
 
   # AOEE Spring Boot proxy - REST API gateway to gRPC
   # Our social-app calls this to query the graph

@@ -223,14 +223,22 @@ function FriendRequestCard({ request }: { request: FriendRequestDto }) {
 
 function SuggestedPerson({ person }: { person: { id: number; name: string; description: string | null; avatarUrl: string | null } }) {
   const queryClient = useQueryClient();
-  const [sentStatus, setSentStatus] = useState<string | null>(null);
   const [error, setError] = useState(false);
+
+  const { data: serverStatus } = useQuery<{ status: string }>({
+    queryKey: ['friend-status', person.id],
+    queryFn: async () => {
+      const { data } = await api.get(`/friend-requests/status/${person.id}`);
+      return data;
+    },
+    staleTime: 60000,
+  });
 
   const sendRequest = useMutation({
     mutationFn: () => api.post(`/friend-requests/${person.id}`),
-    onSuccess: (res) => {
-      setSentStatus(res.data.status);
+    onSuccess: () => {
       setError(false);
+      queryClient.invalidateQueries({ queryKey: ['friend-status', person.id] });
       queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
     },
     onError: () => {
@@ -238,14 +246,18 @@ function SuggestedPerson({ person }: { person: { id: number; name: string; descr
     },
   });
 
-  const buttonDisabled = sendRequest.isPending || sentStatus === 'SENT' || sentStatus === 'ALREADY_EXISTS' || sentStatus === 'ALREADY_FRIENDS';
+  const status = serverStatus?.status ?? 'NONE';
+  const alreadySent = status === 'REQUEST_SENT' || status === 'FRIENDS' || status === 'REQUEST_RECEIVED';
+  const buttonDisabled = sendRequest.isPending || alreadySent;
   const buttonText = error
     ? 'Failed - Retry'
-    : sentStatus === 'SENT' || sentStatus === 'ALREADY_EXISTS'
+    : status === 'REQUEST_SENT'
       ? 'Requested'
-      : sentStatus === 'ALREADY_FRIENDS'
+      : status === 'FRIENDS'
         ? 'Friends'
-        : 'Add Friend';
+        : status === 'REQUEST_RECEIVED'
+          ? 'Respond to Request'
+          : 'Add Friend';
 
   return (
     <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors">

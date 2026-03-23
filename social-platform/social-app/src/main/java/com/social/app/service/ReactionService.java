@@ -45,9 +45,12 @@ public class ReactionService {
 
     @Transactional
     public ReactionEntity react(long userId, long targetId, String targetType, String reactionType) {
-        // Remove existing reaction if present
+        // Remove existing reaction if present, flush to avoid unique constraint violation
         reactionRepository.findByTargetIdAndUserId(targetId, userId)
-                .ifPresent(existing -> reactionRepository.delete(existing));
+                .ifPresent(existing -> {
+                    reactionRepository.delete(existing);
+                    reactionRepository.flush();
+                });
 
         var entity = new ReactionEntity();
         entity.setId(idGenerator.next(ObjectType.REACTION).value());
