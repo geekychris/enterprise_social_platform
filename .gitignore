@@ -1,0 +1,33 @@
+# AOEE — fetched from git by setup-aoee.sh, do not check in
+/aoee/
+
+# Build outputs
+**/target/
+**/node_modules/
+**/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# Logs
+/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User uploads (runtime + embedded test data)
+/uploads/
+**/uploads/
+
+# Claude Code
+.claude/
+
+# Environment
+.env
+.env.local

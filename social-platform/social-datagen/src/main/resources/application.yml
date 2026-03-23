@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/social_enterprise
+    username: social
+    password: social
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+
+datagen:
+  batch-size: 500
+  seed: 42
+  aoee:
+    base-url: http://localhost:8081
+    batch-size: 200
+    connect-timeout: 5000
+    read-timeout: 30000
+
+logging:
+  level:
+    com.social.datagen: INFO

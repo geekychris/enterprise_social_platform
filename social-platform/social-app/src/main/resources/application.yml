@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/social_enterprise
+    username: social
+    password:
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+  graphql:
+    graphiql:
+      enabled: true
+    path: /graphql
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+social:
+  jwt:
+    secret: a-long-random-secret-key-for-development-only-change-in-production-please
+    expiration-ms: 86400000
+  auth:
+    debug-bypass: true
+  aoee:
+    host: localhost
+    port: 50051
+    proxy-port: 8082
+  opensearch:
+    host: localhost
+    port: 9200
+  media:
+    upload-dir: ./uploads

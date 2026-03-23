@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: social-postgres
+    environment:
+      POSTGRES_DB: social_enterprise
+      POSTGRES_USER: social
+      POSTGRES_PASSWORD: social_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U social -d social_enterprise"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  opensearch:
+    image: opensearchproject/opensearch:2.12.0
+    container_name: social-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\\|yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.12.0
+    container_name: social-opensearch-dashboards
+    environment:
+      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+  # AOEE Rust gRPC server - social graph cache
+  # Configured to persist edges by calling our social-app at /api/v1/edges
+  aoee-server:
+    build:
+      context: ./aoee
+      dockerfile: Dockerfile
+    container_name: social-aoee
+    environment:
+      AOEE_LISTEN_ADDR: "0.0.0.0:50051"
+      AOEE_STORAGE_TYPE: http
+      AOEE_HTTP_URL: "http://host.docker.internal:8080"
+      AOEE_WRITE_THROUGH: "true"
+      RUST_LOG: info,aoee_storage=debug
+    ports:
+      - "50051:50051"
+    extra_hosts:
+      - "host.docker.internal:192.168.1.145"
+
+  # AOEE Spring Boot proxy - REST API gateway to gRPC
+  # Our social-app calls this to query the graph
+  aoee-proxy:
+    build:
+      context: ./aoee
+      dockerfile: Dockerfile.proxy
+    container_name: social-aoee-proxy
+    environment:
+      AOEE_HOST: aoee-server
+      AOEE_PORT: 50051
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      - aoee-server
+
+volumes:
+  postgres_data:
+  opensearch_data:

@@ -1,0 +1,120 @@
+type Query {
+    user(id: ID!): User
+    post(id: ID!): Post
+    feed(cursor: String, limit: Int): FeedResponse
+    search(query: String!, type: String): SearchResult
+    me: User
+}
+
+type Mutation {
+    createPost(content: String!, targetType: String, targetId: ID, visibility: String): Post
+    createComment(postId: ID!, parentCommentId: ID, content: String!): Comment
+    react(targetId: ID!, reactionType: String!): Boolean
+    follow(targetId: ID!): Boolean
+    unfollow(targetId: ID!): Boolean
+}
+
+type User {
+    id: ID!
+    username: String!
+    displayName: String
+    email: String
+    avatarUrl: String
+    bio: String
+    visibility: String
+    followerCount: Int
+    followingCount: Int
+}
+
+type Post {
+    id: ID!
+    author: User
+    content: String
+    targetType: String
+    targetId: ID
+    visibility: String
+    reactionCounts: [ReactionSummary]
+    commentCount: Int
+    comments: [Comment]
+    attachments: [Attachment]
+    createdAt: String
+}
+
+type Comment {
+    id: ID!
+    author: User
+    content: String
+    depth: Int
+    postId: ID
+    parentCommentId: ID
+    replies: [Comment]
+    createdAt: String
+}
+
+type Attachment {
+    id: ID!
+    fileUrl: String
+    mediaType: String
+    fileSize: Int
+    width: Int
+    height: Int
+}
+
+type Team {
+    id: ID!
+    name: String!
+    slug: String
+    description: String
+    visibility: String
+    memberCount: Int
+}
+
+type Page {
+    id: ID!
+    name: String!
+    slug: String
+    description: String
+    avatarUrl: String
+    visibility: String
+}
+
+type Group {
+    id: ID!
+    name: String!
+    slug: String
+    description: String
+    visibility: String
+}
+
+type Project {
+    id: ID!
+    name: String!
+    slug: String
+    description: String
+    visibility: String
+}
+
+type ReactionSummary {
+    type: String!
+    count: Int!
+}
+
+type FeedResponse {
+    posts: [Post]
+    nextCursor: String
+    hasMore: Boolean
+}
+
+type SearchResult {
+    hits: [SearchHit]
+    totalHits: Int
+}
+
+type SearchHit {
+    id: ID!
+    objectType: String
+    name: String
+    description: String
+    avatarUrl: String
+    score: Float
+}
