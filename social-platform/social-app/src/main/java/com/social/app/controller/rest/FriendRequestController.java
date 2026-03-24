@@ -5,6 +5,7 @@ import com.social.app.persistence.entity.FollowEntity;
 import com.social.app.persistence.repository.FriendRequestRepository;
 import com.social.app.persistence.repository.FollowRepository;
 import com.social.app.service.FollowEvent;
+import com.social.app.service.NotificationService;
 import com.social.app.service.UserService;
 import com.social.core.dto.FriendRequestDto;
 import com.social.core.id.GlobalIdGenerator;
@@ -27,17 +28,20 @@ public class FriendRequestController {
     private final UserService userService;
     private final GlobalIdGenerator idGenerator;
     private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
     public FriendRequestController(FriendRequestRepository friendRequestRepository,
                                     FollowRepository followRepository,
                                     UserService userService,
                                     GlobalIdGenerator idGenerator,
-                                    ApplicationEventPublisher eventPublisher) {
+                                    ApplicationEventPublisher eventPublisher,
+                                    NotificationService notificationService) {
         this.friendRequestRepository = friendRequestRepository;
         this.followRepository = followRepository;
         this.userService = userService;
         this.idGenerator = idGenerator;
         this.eventPublisher = eventPublisher;
+        this.notificationService = notificationService;
     }
 
     @PostMapping("/{targetId}")
@@ -65,6 +69,8 @@ public class FriendRequestController {
         entity.setReceiverId(targetId);
         entity.setStatus("PENDING");
         friendRequestRepository.save(entity);
+
+        notificationService.notifyFriendRequest(targetId, userId);
 
         return ResponseEntity.ok(Map.of("status", "SENT", "id", entity.getId()));
     }
@@ -99,6 +105,8 @@ public class FriendRequestController {
 
         request.setStatus("ACCEPTED");
         friendRequestRepository.save(request);
+
+        notificationService.notifyFriendAccepted(request.getSenderId(), userId);
 
         // Create mutual follow relationships
         createFollowIfNotExists(request.getSenderId(), request.getReceiverId());

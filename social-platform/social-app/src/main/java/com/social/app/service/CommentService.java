@@ -1,12 +1,14 @@
 package com.social.app.service;
 
 import com.social.app.persistence.entity.CommentEntity;
+import com.social.app.persistence.repository.AttachmentRepository;
 import com.social.app.persistence.repository.CommentRepository;
 import com.social.core.dto.CommentDto;
 import com.social.core.dto.CreateCommentRequest;
 import com.social.core.dto.UserSummaryDto;
 import com.social.core.id.GlobalIdGenerator;
 import com.social.core.id.ObjectType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,13 +23,22 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final GlobalIdGenerator idGenerator;
     private final UserService userService;
+    private final AttachmentRepository attachmentRepository;
+    private final AttachmentService attachmentService;
+    private final JdbcTemplate jdbc;
 
     public CommentService(CommentRepository commentRepository,
                           GlobalIdGenerator idGenerator,
-                          UserService userService) {
+                          UserService userService,
+                          AttachmentRepository attachmentRepository,
+                          AttachmentService attachmentService,
+                          JdbcTemplate jdbc) {
         this.commentRepository = commentRepository;
         this.idGenerator = idGenerator;
         this.userService = userService;
+        this.attachmentRepository = attachmentRepository;
+        this.attachmentService = attachmentService;
+        this.jdbc = jdbc;
     }
 
     @Transactional
@@ -49,7 +60,16 @@ public class CommentService {
         entity.setAuthorId(authorId);
         entity.setContent(request.content());
         entity.setDepth(depth);
-        return commentRepository.save(entity);
+        CommentEntity saved = commentRepository.save(entity);
+
+        if (request.attachmentIds() != null && !request.attachmentIds().isEmpty()) {
+            for (Long attId : request.attachmentIds()) {
+                jdbc.update("INSERT INTO comment_attachments (comment_id, attachment_id) VALUES (?, ?)",
+                        saved.getId(), attId);
+            }
+        }
+
+        return saved;
     }
 
     public Optional<CommentEntity> getById(long id) {
@@ -83,12 +103,22 @@ public class CommentService {
                 entity.getDepth(),
                 entity.getPostId(),
                 entity.getParentCommentId(),
-                List.of(),
+                loadAttachments(entity.getId()),
                 Map.of(),
                 null,
                 replies,
                 entity.getCreatedAt()
         );
+    }
+
+    private List<com.social.core.dto.AttachmentDto> loadAttachments(long commentId) {
+        List<Long> attachmentIds = jdbc.queryForList(
+                "SELECT attachment_id FROM comment_attachments WHERE comment_id = ? ORDER BY attachment_id",
+                Long.class, commentId);
+        if (attachmentIds.isEmpty()) return List.of();
+        return attachmentRepository.findByIdIn(attachmentIds).stream()
+                .map(attachmentService::toDto)
+                .toList();
     }
 
     @Transactional

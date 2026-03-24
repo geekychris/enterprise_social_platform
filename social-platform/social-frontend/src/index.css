@@ -149,16 +149,40 @@
     background: var(--color-primary-900) !important;
     border-color: var(--color-primary-800) !important;
   }
-  header a, header button, header span, header input {
+  header a, header button, header span {
     color: #fff;
   }
-  header input {
-    background: var(--color-primary-800);
-    border-color: var(--color-primary-700);
+  header input[type="text"], header input[type="search"], header input[placeholder*="Search"] {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
     color: #fff;
+    border-radius: 9999px;
+  }
+  header input[type="text"]:focus, header input[type="search"]:focus, header input[placeholder*="Search"]:focus {
+    background: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.4);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
   }
   header input::placeholder {
     color: rgba(255,255,255,0.5);
+  }
+  /* Keep switcher dropdown inputs dark-on-white */
+  header .absolute input {
+    background: #fff;
+    color: var(--color-gray-900);
+    border-color: var(--color-gray-200);
+  }
+  header .absolute input::placeholder {
+    color: var(--color-gray-400);
+  }
+  header .absolute input:focus {
+    background: #fff;
+    box-shadow: 0 0 0 2px var(--color-primary-500);
+    border-color: transparent;
+  }
+  header .absolute button, header .absolute span, header .absolute a, header .absolute div {
+    color: inherit;
   }
 }
 

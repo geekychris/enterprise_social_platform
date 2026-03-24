@@ -11,6 +11,7 @@ import com.social.core.id.GlobalId;
 import com.social.core.id.ObjectType;
 import com.social.core.model.TargetType;
 import com.social.core.model.Visibility;
+import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -62,7 +63,7 @@ public class MutationController {
         Long userId = getCurrentUserId();
         if (userId == null) throw new IllegalStateException("Not authenticated");
 
-        var request = new CreateCommentRequest(postId, parentCommentId, content);
+        var request = new CreateCommentRequest(postId, parentCommentId, content, List.of());
         var entity = commentService.create(userId, request);
         return commentService.toDto(entity);
     }

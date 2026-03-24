@@ -87,9 +87,26 @@ export default function CommentThread({ comment, maxDepth = 2 }: Props) {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {comment.content}
-              </p>
+              <>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  <MentionText text={comment.content} />
+                </p>
+                {comment.attachments && comment.attachments.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mt-1.5">
+                    {comment.attachments.map((att) =>
+                      att.mediaType?.startsWith('image/') ? (
+                        <img key={att.id} src={att.fileUrl} alt="" className="max-w-xs max-h-48 rounded-lg border border-gray-200 object-cover" />
+                      ) : att.mediaType?.startsWith('video/') ? (
+                        <video key={att.id} src={att.fileUrl} controls className="max-w-xs max-h-48 rounded-lg border border-gray-200" />
+                      ) : (
+                        <a key={att.id} href={att.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary-500 hover:underline">
+                          {att.fileUrl.split('/').pop()}
+                        </a>
+                      )
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Edit button - only visible on hover for own comments */}
@@ -148,5 +165,49 @@ export default function CommentThread({ comment, maxDepth = 2 }: Props) {
         <CommentThread key={reply.id} comment={reply} maxDepth={maxDepth} />
       ))}
     </div>
+  );
+}
+
+/**
+ * Renders text with @[Name](id) patterns as clickable profile links.
+ */
+function MentionText({ text }: { text: string }) {
+  // Match @[Display Name](userId)
+  const mentionRegex = /@\[([^\]]+)\]\((\d+)\)/g;
+  const parts: (string | { name: string; id: string })[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = mentionRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    parts.push({ name: match[1], id: match[2] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  if (parts.length <= 1 && typeof parts[0] === 'string') {
+    return <>{text}</>;
+  }
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === 'string' ? (
+          <span key={i}>{part}</span>
+        ) : (
+          <Link
+            key={i}
+            to={`/profile/${part.id}`}
+            className="text-primary-600 font-medium hover:underline"
+          >
+            @{part.name}
+          </Link>
+        )
+      )}
+    </>
   );
 }

@@ -15,7 +15,15 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     Optional<UserEntity> findByEmail(String email);
 
-    @Query("SELECT u FROM UserEntity u WHERE LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(u.displayName) LIKE LOWER(CONCAT('%', :query, '%'))")
+    @Query("SELECT u FROM UserEntity u WHERE " +
+           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.displayName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.jobTitle) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.department) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.location) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.skills) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.interests) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.bio) LIKE LOWER(CONCAT('%', :query, '%'))")
     List<UserEntity> searchByUsernameOrDisplayName(String query);
 
     @Query("SELECT MAX(u.id) FROM UserEntity u")

@@ -58,10 +58,11 @@ interface Props {
   onPin?: (postId: number) => void;
   onUnpin?: () => void;
   canPin?: boolean;
+  defaultExpanded?: boolean;
 }
 
-export default function PostCard({ post, pinned, onPin, onUnpin, canPin }: Props) {
-  const [showComments, setShowComments] = useState(false);
+export default function PostCard({ post, pinned, onPin, onUnpin, canPin, defaultExpanded }: Props) {
+  const [showComments, setShowComments] = useState(defaultExpanded ?? false);
   const [showMenu, setShowMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);

@@ -155,10 +155,24 @@ public class OpenSearchService {
         if (type == null || "user".equalsIgnoreCase(type)) {
             List<UserEntity> users = userRepository.searchByUsernameOrDisplayName(query);
             for (UserEntity u : users) {
+                // Build a rich description from profile fields
+                StringBuilder desc = new StringBuilder();
+                if (u.getJobTitle() != null) desc.append(u.getJobTitle());
+                if (u.getDepartment() != null) {
+                    if (desc.length() > 0) desc.append(" · ");
+                    desc.append(u.getDepartment());
+                }
+                if (u.getLocation() != null) {
+                    if (desc.length() > 0) desc.append(" · ");
+                    desc.append(u.getLocation());
+                }
+                if (desc.length() == 0 && u.getBio() != null) {
+                    desc.append(u.getBio());
+                }
                 hits.add(new SearchResultDto.SearchHit(
                         u.getId(), "USER",
                         u.getDisplayName() != null ? u.getDisplayName() : u.getUsername(),
-                        u.getBio(),
+                        desc.length() > 0 ? desc.toString() : null,
                         u.getAvatarUrl(),
                         1.0f
                 ));

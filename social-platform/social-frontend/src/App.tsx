@@ -11,6 +11,7 @@ import PagePage from './pages/PagePage';
 import MessagesPage from './pages/MessagesPage';
 import AboutPage from './pages/AboutPage';
 import AdminPage from './pages/AdminPage';
+import PostPage from './pages/PostPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => !!s.token || !!s.debugUserId);
@@ -29,6 +30,7 @@ export default function App() {
             <AppShell>
               <Routes>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/post/:id" element={<PostPage />} />
                 <Route path="/profile/:id" element={<ProfilePage />} />
                 <Route path="/team/:id" element={<TeamPage />} />
                 <Route path="/group/:id" element={<GroupPage />} />
