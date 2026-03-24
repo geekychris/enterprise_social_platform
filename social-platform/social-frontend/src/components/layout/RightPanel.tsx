@@ -61,7 +61,7 @@ export default function RightPanel() {
     .slice(0, 5) ?? [];
 
   return (
-    <aside className="fixed right-0 top-14 bottom-0 w-72 bg-white border-l border-gray-100 pt-4 hidden xl:block z-20 overflow-y-auto">
+    <aside className="fixed right-0 top-20 bottom-0 w-72 bg-white border-l border-gray-100 pt-4 hidden xl:block z-20 overflow-y-auto">
       {/* Friend Requests */}
       {receivedRequests && receivedRequests.length > 0 && (
         <div className="px-4 mb-6">

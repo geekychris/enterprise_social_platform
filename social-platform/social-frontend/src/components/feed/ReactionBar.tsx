@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
@@ -252,49 +252,97 @@ export default function ReactionBar({
         </div>
       )}
 
-      {/* React button */}
-      <div
-        className="relative shrink-0 pb-2 -mb-2"
-        onMouseEnter={() => setShowPicker(true)}
-        onMouseLeave={() => setShowPicker(false)}
-      >
-        <button
-          onClick={() =>
-            localReaction ? removeReaction.mutate() : handleReact('LIKE')
-          }
-          disabled={isPending}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            localReaction
-              ? 'text-primary-500 bg-primary-50'
-              : 'text-gray-500 hover:bg-gray-100'
-          } ${isPending ? 'opacity-70' : ''}`}
-        >
-          <span className="text-base">
-            {localReaction
-              ? REACTION_EMOJI[localReaction] ?? '\uD83D\uDC4D'
-              : '\uD83D\uDC4D'}
-          </span>
-          {localReaction ?? 'Like'}
-        </button>
+      {/* React button + picker */}
+      <ReactionPicker
+        localReaction={localReaction}
+        isPending={isPending}
+        onReact={handleReact}
+        onToggle={() => localReaction ? removeReaction.mutate() : handleReact('LIKE')}
+      />
+    </div>
+  );
+}
 
-        {/* Reaction picker */}
-        {showPicker && (
-          <div className="absolute bottom-full right-0 mb-2 bg-white rounded-full shadow-lg border border-gray-100 px-2 py-1 flex gap-1 z-40">
-            {REACTIONS.map(({ type, emoji, label }) => (
-              <button
-                key={type}
-                onClick={() => handleReact(type)}
-                className={`text-xl hover:scale-125 transition-transform p-1 ${
-                  localReaction === type ? 'bg-primary-50 rounded-full' : ''
-                }`}
-                title={label}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+/* ── Reaction Picker with hover delay ── */
+
+function ReactionPicker({
+  localReaction,
+  isPending,
+  onReact,
+  onToggle,
+}: {
+  localReaction: string | null;
+  isPending: boolean;
+  onReact: (type: ReactionType) => void;
+  onToggle: () => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHideTimer = useCallback(() => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }, []);
+
+  const startHideTimer = useCallback(() => {
+    clearHideTimer();
+    hideTimer.current = setTimeout(() => setShowPicker(false), 300);
+  }, [clearHideTimer]);
+
+  const handleEnter = useCallback(() => {
+    clearHideTimer();
+    setShowPicker(true);
+  }, [clearHideTimer]);
+
+  useEffect(() => {
+    return () => clearHideTimer();
+  }, [clearHideTimer]);
+
+  return (
+    <div className="relative shrink-0">
+      {/* Picker (above) */}
+      {showPicker && (
+        <div
+          className="absolute bottom-full right-0 mb-1 bg-white rounded-full shadow-lg border border-gray-100 px-1.5 py-1 flex gap-0.5 z-40"
+          onMouseEnter={handleEnter}
+          onMouseLeave={startHideTimer}
+        >
+          {REACTIONS.map(({ type, emoji, label }) => (
+            <button
+              key={type}
+              onClick={() => { onReact(type); setShowPicker(false); }}
+              className={`text-xl hover:scale-125 transition-transform p-1 rounded-full ${
+                localReaction === type ? 'bg-primary-50' : ''
+              }`}
+              title={label}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Button */}
+      <button
+        onClick={onToggle}
+        onMouseEnter={handleEnter}
+        onMouseLeave={startHideTimer}
+        disabled={isPending}
+        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          localReaction
+            ? 'text-primary-500 bg-primary-50'
+            : 'text-gray-500 hover:bg-gray-100'
+        } ${isPending ? 'opacity-70' : ''}`}
+      >
+        <span className="text-base">
+          {localReaction
+            ? REACTION_EMOJI[localReaction] ?? '\uD83D\uDC4D'
+            : '\uD83D\uDC4D'}
+        </span>
+        {localReaction ?? 'Like'}
+      </button>
     </div>
   );
 }

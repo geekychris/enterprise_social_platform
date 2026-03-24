@@ -169,7 +169,7 @@ export default function Sidebar() {
   );
 
   return (
-    <aside className="fixed left-0 top-14 bottom-0 w-60 bg-white border-r border-gray-100 pt-4 hidden lg:block z-20 overflow-y-auto">
+    <aside className="fixed left-0 top-20 bottom-0 w-60 bg-white border-r border-gray-100 pt-4 hidden lg:block z-20 overflow-y-auto">
       <nav className="px-2 space-y-1">
         {allItems.map(({ to, label, icon: Icon }) => (
           <NavLink

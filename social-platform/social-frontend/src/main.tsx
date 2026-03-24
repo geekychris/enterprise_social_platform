@@ -15,6 +15,16 @@ const queryClient = new QueryClient({
   },
 });
 
+// Load platform theme
+fetch('/api/settings/theme')
+  .then(r => r.json())
+  .then(data => {
+    if (data?.theme) {
+      document.documentElement.setAttribute('data-theme', data.theme);
+    }
+  })
+  .catch(() => {});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

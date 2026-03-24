@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -49,7 +49,7 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">WorkSphere Admin</h1>
 
       {/* Tab bar */}
       <div className="flex border-b border-gray-200 mb-6">
@@ -121,177 +121,326 @@ function DashboardTab() {
     queryFn: () => api.get('/admin/system').then((r) => r.data),
   });
 
+  const { data: contentBreakdown } = useQuery({
+    queryKey: ['admin-content-breakdown'],
+    queryFn: () => api.get('/admin/analytics/content-breakdown').then((r) => r.data),
+  });
+
+  const { data: hourlyActivity } = useQuery({
+    queryKey: ['admin-hourly-activity'],
+    queryFn: () => api.get('/admin/analytics/hourly-activity').then((r) => r.data),
+  });
+
+  const { data: messaging } = useQuery({
+    queryKey: ['admin-messaging'],
+    queryFn: () => api.get('/admin/analytics/messaging').then((r) => r.data),
+  });
+
+  const { data: socialGraph } = useQuery({
+    queryKey: ['admin-social-graph'],
+    queryFn: () => api.get('/admin/analytics/social-graph').then((r) => r.data),
+  });
+
   if (loadingStats) {
     return <div className="text-gray-400 py-10 text-center">Loading dashboard...</div>;
   }
 
+  const REACTION_EMOJI: Record<string, string> = {
+    LIKE: '\uD83D\uDC4D', LOVE: '\u2764\uFE0F', HAHA: '\uD83D\uDE02',
+    WOW: '\uD83D\uDE2E', SAD: '\uD83D\uDE22', ANGRY: '\uD83D\uDE20',
+  };
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
+      {/* Theme Selector */}
+      <ThemeSelector />
+
+      {/* ── Key Metrics ── */}
       {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Total Users"
-            value={stats.totalUsers}
-            badge={stats.newUsersLast7d != null ? `+${stats.newUsersLast7d} last 7d` : undefined}
-          />
-          <StatCard
-            label="Total Posts"
-            value={stats.totalPosts}
-            badge={stats.postsLast24h != null ? `${stats.postsLast24h} last 24h` : undefined}
-          />
-          <StatCard label="Total Groups" value={stats.totalGroups} />
-          <StatCard label="Total Messages" value={stats.totalMessages} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Users" value={stats.totalUsers} badge={stats.newUsersLast7d > 0 ? `+${stats.newUsersLast7d} 7d` : undefined} />
+          <StatCard label="Posts" value={stats.totalPosts} badge={stats.postsLast24h > 0 ? `${stats.postsLast24h} today` : undefined} />
+          <StatCard label="Comments" value={stats.totalComments} />
+          <StatCard label="Reactions" value={stats.totalReactions} />
+          <StatCard label="Groups" value={stats.totalGroups} />
+          <StatCard label="Messages" value={stats.totalMessages} />
         </div>
       )}
 
-      {/* DAU / MAU */}
+      {/* ── Active Users ── */}
       {dauMau && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="DAU (Today)" value={dauMau.dau} badge={`${dauMau.totalUsers ? Math.round((Number(dauMau.dau) / Number(dauMau.totalUsers)) * 100) : 0}% of users`} />
-            <StatCard label="WAU (7 days)" value={dauMau.wau} badge={`${dauMau.totalUsers ? Math.round((Number(dauMau.wau) / Number(dauMau.totalUsers)) * 100) : 0}% of users`} />
-            <StatCard label="MAU (30 days)" value={dauMau.mau} badge={`${dauMau.totalUsers ? Math.round((Number(dauMau.mau) / Number(dauMau.totalUsers)) * 100) : 0}% of users`} />
-            <StatCard label="Stickiness" value={dauMau.mau && Number(dauMau.mau) > 0 ? `${Math.round((Number(dauMau.dau) / Number(dauMau.mau)) * 100)}%` : '0%'} badge="DAU/MAU ratio" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="DAU (Today)" value={dauMau.dau} badge={`${dauMau.totalUsers ? Math.round((Number(dauMau.dau) / Number(dauMau.totalUsers)) * 100) : 0}%`} />
+          <StatCard label="WAU (7d)" value={dauMau.wau} badge={`${dauMau.totalUsers ? Math.round((Number(dauMau.wau) / Number(dauMau.totalUsers)) * 100) : 0}%`} />
+          <StatCard label="MAU (30d)" value={dauMau.mau} badge={`${dauMau.totalUsers ? Math.round((Number(dauMau.mau) / Number(dauMau.totalUsers)) * 100) : 0}%`} />
+          <StatCard label="Stickiness" value={dauMau.mau && Number(dauMau.mau) > 0 ? `${Math.round((Number(dauMau.dau) / Number(dauMau.mau)) * 100)}%` : '0%'} badge="DAU/MAU" />
+        </div>
+      )}
+
+      {/* ── DAU Trend + Post Activity (side by side) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {dauMau?.dauTrend && Array.isArray(dauMau.dauTrend) && dauMau.dauTrend.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Daily Active Users (14d)</h3>
+            <BarChart data={dauMau.dauTrend} valueKey="active_users" labelKey="date" color="bg-emerald-500" />
           </div>
-          {dauMau.dauTrend && Array.isArray(dauMau.dauTrend) && dauMau.dauTrend.length > 0 && (
+        )}
+        {activity && Array.isArray(activity) && activity.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Posts (Last 30d)</h3>
+            <BarChart data={activity} valueKey="postCount" labelKey="date" />
+          </div>
+        )}
+      </div>
+
+      {/* ── Content Breakdown ── */}
+      {contentBreakdown && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <StatCard label="Participation" value={`${contentBreakdown.postStats?.userParticipationRate ?? 0}%`} badge="users who posted" />
+            <StatCard label="Avg Posts/User" value={contentBreakdown.postStats?.avgPostsPerActiveUser ?? 0} badge="active users" />
+            <StatCard label="Avg Reactions/Post" value={contentBreakdown.avgReactionsPerPost ?? 0} />
+            <StatCard label="Avg Comments/Post" value={contentBreakdown.avgCommentsPerPost ?? 0} />
+            <StatCard label="Active Authors" value={contentBreakdown.postStats?.usersWithPosts ?? 0} badge={`of ${contentBreakdown.postStats?.totalUsers ?? 0}`} />
+          </div>
+
+          {/* Reaction Distribution */}
+          {contentBreakdown.reactionDistribution && contentBreakdown.reactionDistribution.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Daily Active Users (14 days)</h3>
-              <BarChart data={dauMau.dauTrend} valueKey="active_users" labelKey="date" color="bg-emerald-500" />
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Reaction Distribution</h3>
+              <div className="flex gap-2 flex-wrap">
+                {contentBreakdown.reactionDistribution.map((r: any) => {
+                  const total = contentBreakdown.reactionDistribution.reduce((s: number, x: any) => s + Number(x.count), 0);
+                  const pct = total > 0 ? Math.round((Number(r.count) / total) * 100) : 0;
+                  return (
+                    <div key={r.reaction_type} className="flex-1 min-w-[100px] bg-gray-50 rounded-lg p-3 text-center">
+                      <div className="text-2xl mb-1">{REACTION_EMOJI[r.reaction_type] ?? r.reaction_type}</div>
+                      <div className="text-sm font-bold text-gray-900">{Number(r.count).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">{pct}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Post Target Distribution */}
+          {contentBreakdown.postTargetDistribution && contentBreakdown.postTargetDistribution.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Where Are Posts Made?</h3>
+              <div className="space-y-2">
+                {contentBreakdown.postTargetDistribution.map((t: any) => {
+                  const total = contentBreakdown.postTargetDistribution.reduce((s: number, x: any) => s + Number(x.count), 0);
+                  const pct = total > 0 ? (Number(t.count) / total) * 100 : 0;
+                  const label = (t.target_type || 'USER_FEED').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase());
+                  return (
+                    <div key={t.target_type} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-28 truncate">{label}</span>
+                      <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                        <div className="bg-primary-500 h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-500 w-20 text-right">{Number(t.count).toLocaleString()} ({Math.round(pct)}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </>
       )}
 
-      {/* Activity Chart */}
-      {activity && Array.isArray(activity) && activity.length > 0 && (
+      {/* ── Activity Heatmap ── */}
+      {hourlyActivity && Array.isArray(hourlyActivity) && hourlyActivity.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Post Activity (Last 30 Days)</h3>
-          <BarChart data={activity} valueKey="postCount" labelKey="date" />
-        </div>
-      )}
-
-      {/* Top Users */}
-      {topUsers && Array.isArray(topUsers) && topUsers.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Users (7d)</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="pb-2 w-10">#</th>
-                <th className="pb-2">User</th>
-                <th className="pb-2 text-right">Posts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topUsers.map((u: any, i: number) => (
-                <tr key={String(u.userId ?? u.id ?? i)} className="even:bg-gray-50">
-                  <td className="py-2 text-gray-400">{i + 1}</td>
-                  <td className="py-2">
-                    <Link
-                      to={`/profile/${String(u.userId ?? u.id)}`}
-                      className="flex items-center gap-2 text-primary-600 hover:underline"
-                    >
-                      {u.avatarUrl ? (
-                        <img src={u.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
-                          {(u.displayName ?? u.username ?? '?')[0]?.toUpperCase()}
-                        </div>
-                      )}
-                      {u.displayName || u.username}
-                    </Link>
-                  </td>
-                  <td className="py-2 text-right font-medium">{u.postCount}</td>
-                </tr>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Posting Activity Heatmap (Last 30d)</h3>
+          <div className="overflow-x-auto">
+            <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, 1fr)` }}>
+              {/* Hour labels */}
+              <div />
+              {Array.from({ length: 24 }, (_, h) => (
+                <div key={h} className="text-[9px] text-gray-400 text-center">{h}</div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Top Groups */}
-      {topGroups && Array.isArray(topGroups) && topGroups.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Groups</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="pb-2 w-10">#</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2 text-right">Members</th>
-                <th className="pb-2 text-right">Posts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topGroups.map((g: any, i: number) => (
-                <tr key={String(g.groupId ?? g.id ?? i)} className="even:bg-gray-50">
-                  <td className="py-2 text-gray-400">{i + 1}</td>
-                  <td className="py-2">
-                    <Link to={`/group/${String(g.groupId ?? g.id)}`} className="text-primary-600 hover:underline">
-                      {g.name}
-                    </Link>
-                  </td>
-                  <td className="py-2 text-right">{g.memberCount}</td>
-                  <td className="py-2 text-right font-medium">{g.postCount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Top Pages */}
-      {topPages && Array.isArray(topPages) && topPages.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Pages</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="pb-2 w-10">#</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2 text-right">Followers</th>
-                <th className="pb-2 text-right">Posts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topPages.map((p: any, i: number) => (
-                <tr key={String(p.pageId ?? p.id ?? i)} className="even:bg-gray-50">
-                  <td className="py-2 text-gray-400">{i + 1}</td>
-                  <td className="py-2">
-                    <Link to={`/page/${String(p.pageId ?? p.id)}`} className="text-primary-600 hover:underline">
-                      {p.name}
-                    </Link>
-                  </td>
-                  <td className="py-2 text-right">{p.followerCount}</td>
-                  <td className="py-2 text-right font-medium">{p.postCount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Growth Chart */}
-      {growth && Array.isArray(growth) && growth.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">User Growth (Weekly Signups)</h3>
-          <BarChart data={growth} valueKey="signups" labelKey="week" />
-        </div>
-      )}
-
-      {/* System Health */}
-      {system && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">System Health</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MiniCard label="Upload Dir Size" value={system.uploadDirSize ?? 'N/A'} />
-            <MiniCard label="File Count" value={system.fileCount ?? 'N/A'} />
-            <MiniCard label="DB Size" value={system.dbSize ?? 'N/A'} />
-            <MiniCard label="Duplicate Attachments" value={system.duplicateAttachments ?? 'N/A'} />
+              {/* Rows per day */}
+              {DAY_NAMES.map((day, d) => {
+                const maxCount = Math.max(...hourlyActivity.map((h: any) => Number(h.count) || 0), 1);
+                return (
+                  <React.Fragment key={d}>
+                    <div className="text-[10px] text-gray-500 flex items-center">{day}</div>
+                    {Array.from({ length: 24 }, (_, h) => {
+                      const cell = hourlyActivity.find((x: any) => Number(x.day_of_week) === d && Number(x.hour) === h);
+                      const count = cell ? Number(cell.count) : 0;
+                      const intensity = count / maxCount;
+                      return (
+                        <div
+                          key={h}
+                          className="w-full aspect-square rounded-sm group relative"
+                          style={{ backgroundColor: count > 0 ? `rgba(79, 70, 229, ${0.15 + intensity * 0.85})` : '#f1f5f9' }}
+                          title={`${day} ${h}:00 — ${count} posts`}
+                        />
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+            <span>Less</span>
+            {[0.1, 0.3, 0.5, 0.7, 1].map(i => (
+              <div key={i} className="w-3 h-3 rounded-sm" style={{ backgroundColor: `rgba(79, 70, 229, ${0.15 + i * 0.85})` }} />
+            ))}
+            <span>More</span>
           </div>
         </div>
       )}
+
+      {/* ── Social Graph + Messaging (side by side) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Social Graph */}
+        {socialGraph && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Social Graph</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <MiniCard label="Total Follows" value={Number(socialGraph.totalFollows).toLocaleString()} />
+              <MiniCard label="Avg Follows/User" value={socialGraph.avgFollowsPerUser} />
+              <MiniCard label="Group Memberships" value={Number(socialGraph.totalMemberships).toLocaleString()} />
+              <MiniCard label="Friend Requests" value={`${socialGraph.acceptedFriendRequests} accepted / ${socialGraph.pendingFriendRequests} pending`} />
+            </div>
+            {socialGraph.mostFollowed && socialGraph.mostFollowed.length > 0 && (
+              <>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Most Followed</h4>
+                <div className="space-y-1.5">
+                  {socialGraph.mostFollowed.slice(0, 5).map((u: any, i: number) => (
+                    <div key={String(u.id)} className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400 w-4 text-right">{i + 1}</span>
+                      {u.avatar_url ? (
+                        <img src={u.avatar_url} className="w-6 h-6 rounded-full" alt="" />
+                      ) : (
+                        <div className="w-6 h-6 bg-primary-400 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                          {(u.display_name ?? u.username ?? '?')[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <Link to={`/profile/${u.id}`} className="text-primary-600 hover:underline flex-1 truncate">
+                        {u.display_name || u.username}
+                      </Link>
+                      <span className="text-gray-500 font-medium">{u.follower_count}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Messaging */}
+        {messaging && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Messaging</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <MiniCard label="Total Messages" value={Number(messaging.totalMessages).toLocaleString()} />
+              <MiniCard label="Conversations" value={Number(messaging.uniqueConversations).toLocaleString()} />
+              <MiniCard label="Users Messaging" value={Number(messaging.usersWhoMessaged).toLocaleString()} />
+              <MiniCard label="Avg/Conversation" value={messaging.uniqueConversations > 0 ? Math.round(Number(messaging.totalMessages) / Number(messaging.uniqueConversations)) : 0} />
+            </div>
+            {messaging.messageTrend && messaging.messageTrend.length > 0 && (
+              <>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Messages (14d)</h4>
+                <BarChart data={messaging.messageTrend} valueKey="msg_count" labelKey="date" color="bg-cyan-500" />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Top Users / Groups / Pages (3 columns) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Top Users */}
+        {topUsers && Array.isArray(topUsers) && topUsers.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Posters (7d)</h3>
+            <div className="space-y-2">
+              {topUsers.map((u: any, i: number) => (
+                <div key={String(u.userId ?? u.id ?? i)} className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400 w-4 text-right">{i + 1}</span>
+                  {u.avatarUrl ? (
+                    <img src={u.avatarUrl} className="w-6 h-6 rounded-full" alt="" />
+                  ) : (
+                    <div className="w-6 h-6 bg-primary-400 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                      {(u.displayName ?? u.username ?? '?')[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <Link to={`/profile/${u.userId ?? u.id}`} className="text-primary-600 hover:underline flex-1 truncate">
+                    {u.displayName || u.username}
+                  </Link>
+                  <span className="text-gray-500 font-medium">{u.postCount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top Groups */}
+        {topGroups && Array.isArray(topGroups) && topGroups.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Groups</h3>
+            <div className="space-y-2">
+              {topGroups.map((g: any, i: number) => (
+                <div key={String(g.groupId ?? g.id ?? i)} className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400 w-4 text-right">{i + 1}</span>
+                  <Link to={`/group/${g.groupId ?? g.id}`} className="text-primary-600 hover:underline flex-1 truncate">
+                    {g.name}
+                  </Link>
+                  <span className="text-xs text-gray-400">{g.memberCount}m</span>
+                  <span className="text-gray-500 font-medium">{g.postCount}p</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top Pages */}
+        {topPages && Array.isArray(topPages) && topPages.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Pages</h3>
+            <div className="space-y-2">
+              {topPages.map((p: any, i: number) => (
+                <div key={String(p.pageId ?? p.id ?? i)} className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400 w-4 text-right">{i + 1}</span>
+                  <Link to={`/page/${p.pageId ?? p.id}`} className="text-primary-600 hover:underline flex-1 truncate">
+                    {p.name}
+                  </Link>
+                  <span className="text-xs text-gray-400">{p.followerCount}f</span>
+                  <span className="text-gray-500 font-medium">{p.postCount}p</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Growth + System (side by side) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {growth && Array.isArray(growth) && growth.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">User Growth (Weekly Signups)</h3>
+            <BarChart data={growth} valueKey="signups" labelKey="week" color="bg-violet-500" />
+          </div>
+        )}
+
+        {system && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">System Health</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <MiniCard label="Upload Dir" value={system.uploadDirSize ?? 'N/A'} />
+              <MiniCard label="Files" value={system.fileCount ?? 'N/A'} />
+              <MiniCard label="DB Size" value={system.databaseSize ?? system.dbSize ?? 'N/A'} />
+              <MiniCard label="Duplicates" value={system.duplicateAttachments ?? 'N/A'} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1873,6 +2022,89 @@ function GraphCanvas({
           document.addEventListener('mouseup', onUp);
         }}>
         <div className="w-16 h-1.5 bg-gray-400 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+function ThemeSelector() {
+  const queryClient = useQueryClient();
+
+  const { data: currentTheme } = useQuery<{ theme: string }>({
+    queryKey: ['platform-theme'],
+    queryFn: () => api.get('/settings/theme').then(r => r.data),
+  });
+
+  const setTheme = useMutation({
+    mutationFn: (theme: string) => api.put('/admin/settings/theme', { theme }),
+    onSuccess: (_, theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      queryClient.setQueryData(['platform-theme'], { theme });
+    },
+  });
+
+  const themes = [
+    {
+      id: 'modern-collaboration',
+      name: 'Modern Collaboration',
+      description: 'Indigo + teal + cool gray — balanced and current',
+      colors: ['#4f46e5', '#14b8a6', '#64748b'],
+    },
+    {
+      id: 'serious-enterprise',
+      name: 'Serious Enterprise',
+      description: 'Navy + steel blue + white — corporate and professional',
+      colors: ['#1b3a5c', '#4a90b0', '#6e7a89'],
+    },
+    {
+      id: 'premium-culture',
+      name: 'Premium Culture',
+      description: 'Deep plum + blue-gray + soft gold — distinctive brand',
+      colors: ['#6b2fa0', '#c9a032', '#6b6b7a'],
+    },
+    {
+      id: 'worksphere',
+      name: 'WorkSphere',
+      description: 'Indigo/cobalt + teal accent + charcoal text',
+      colors: ['#4338ca', '#0d9488', '#334155'],
+    },
+  ];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-1">Platform Theme</h3>
+      <p className="text-sm text-gray-500 mb-4">Choose a color theme for all users. Changes take effect immediately.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {themes.map(theme => {
+          const isActive = currentTheme?.theme === theme.id;
+          return (
+            <button
+              key={theme.id}
+              onClick={() => setTheme.mutate(theme.id)}
+              disabled={setTheme.isPending}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${
+                isActive
+                  ? 'border-primary-500 bg-primary-50 shadow-sm'
+                  : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+              }`}
+            >
+              <div className="flex gap-1.5 mb-3">
+                {theme.colors.map((color, i) => (
+                  <div
+                    key={i}
+                    className="w-6 h-6 rounded-full border border-white shadow-sm"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+              <div className="text-sm font-semibold text-gray-900">{theme.name}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{theme.description}</div>
+              {isActive && (
+                <div className="text-xs text-primary-600 font-medium mt-2">Active</div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

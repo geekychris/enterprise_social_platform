@@ -4,11 +4,24 @@ export interface UserDto {
   displayName: string;
   email: string;
   avatarUrl: string | null;
+  coverUrl: string | null;
   bio: string | null;
   visibility: string;
   followerCount: number;
   followingCount: number;
   admin: boolean;
+  phone: string | null;
+  location: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  joinedCompanyAt: string | null;
+  managerId: number | null;
+  managerName: string | null;
+  interests: string | null;
+  skills: string | null;
+  linkedinUrl: string | null;
+  timezone: string | null;
+  pronouns: string | null;
 }
 
 export interface AttachmentDto {

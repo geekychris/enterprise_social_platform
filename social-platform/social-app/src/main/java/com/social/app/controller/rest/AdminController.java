@@ -169,6 +169,139 @@ public class AdminController {
         return ResponseEntity.ok(result);
     }
 
+    // ── Content Breakdown ───────────────────────────────────────────────
+
+    @GetMapping("/analytics/content-breakdown")
+    public ResponseEntity<Map<String, Object>> contentBreakdown(Authentication auth) {
+        requireAdmin(auth);
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        // Reaction type distribution
+        List<Map<String, Object>> reactionDist = jdbcTemplate.queryForList(
+                "SELECT reaction_type, COUNT(*) as count FROM reactions GROUP BY reaction_type ORDER BY count DESC");
+        result.put("reactionDistribution", reactionDist);
+
+        // Post target type distribution (where are posts being made)
+        List<Map<String, Object>> postTargets = jdbcTemplate.queryForList(
+                "SELECT COALESCE(target_type, 'USER_FEED') as target_type, COUNT(*) as count FROM posts GROUP BY target_type ORDER BY count DESC");
+        result.put("postTargetDistribution", postTargets);
+
+        // Comment depth distribution
+        List<Map<String, Object>> commentDepths = jdbcTemplate.queryForList(
+                "SELECT depth, COUNT(*) as count FROM comments GROUP BY depth ORDER BY depth");
+        result.put("commentDepthDistribution", commentDepths);
+
+        // Average posts per user (active users only)
+        Map<String, Object> postStats = new LinkedHashMap<>();
+        Long totalPosts = postRepository.count();
+        Long totalUsers = userRepository.count();
+        Long usersWithPosts = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT author_id) FROM posts", Long.class);
+        postStats.put("totalPosts", totalPosts);
+        postStats.put("totalUsers", totalUsers);
+        postStats.put("usersWithPosts", usersWithPosts != null ? usersWithPosts : 0);
+        postStats.put("avgPostsPerActiveUser", usersWithPosts != null && usersWithPosts > 0
+                ? Math.round((double) totalPosts / usersWithPosts * 10) / 10.0 : 0);
+        postStats.put("userParticipationRate", totalUsers > 0
+                ? Math.round((double) (usersWithPosts != null ? usersWithPosts : 0) / totalUsers * 100) : 0);
+        result.put("postStats", postStats);
+
+        // Reactions per post (average)
+        Long totalReactions = reactionRepository.count();
+        Long totalComments = commentRepository.count();
+        result.put("avgReactionsPerPost", totalPosts > 0 ? Math.round((double) totalReactions / totalPosts * 10) / 10.0 : 0);
+        result.put("avgCommentsPerPost", totalPosts > 0 ? Math.round((double) totalComments / totalPosts * 10) / 10.0 : 0);
+
+        return ResponseEntity.ok(result);
+    }
+
+    // ── Hourly Activity Heatmap ────────────────────────────────────────
+
+    @GetMapping("/analytics/hourly-activity")
+    public ResponseEntity<List<Map<String, Object>>> hourlyActivity(Authentication auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> hourly = jdbcTemplate.queryForList(
+                "SELECT EXTRACT(DOW FROM created_at)::int as day_of_week, " +
+                "EXTRACT(HOUR FROM created_at)::int as hour, " +
+                "COUNT(*) as count FROM posts " +
+                "WHERE created_at >= now() - interval '30 days' " +
+                "GROUP BY day_of_week, hour ORDER BY day_of_week, hour");
+        return ResponseEntity.ok(hourly);
+    }
+
+    // ── Messaging Analytics ─────────────────────────────────────────────
+
+    @GetMapping("/analytics/messaging")
+    public ResponseEntity<Map<String, Object>> messagingAnalytics(Authentication auth) {
+        requireAdmin(auth);
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        result.put("totalMessages", messageRepository.count());
+
+        Long uniqueConversations = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT LEAST(sender_id, recipient_id) || '-' || GREATEST(sender_id, recipient_id)) FROM messages",
+                Long.class);
+        result.put("uniqueConversations", uniqueConversations != null ? uniqueConversations : 0);
+
+        Long usersWhoMessaged = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT uid) FROM (SELECT sender_id as uid FROM messages UNION SELECT recipient_id FROM messages) sub",
+                Long.class);
+        result.put("usersWhoMessaged", usersWhoMessaged != null ? usersWhoMessaged : 0);
+
+        // Messages per day trend (last 14 days)
+        List<Map<String, Object>> msgTrend = jdbcTemplate.queryForList(
+                "SELECT d.date, COALESCE(sub.msg_count, 0) as msg_count FROM " +
+                "generate_series((now() - interval '14 days')::date, now()::date, '1 day') d(date) " +
+                "LEFT JOIN (" +
+                "  SELECT date_trunc('day', created_at)::date as dt, COUNT(*) as msg_count " +
+                "  FROM messages WHERE created_at >= now() - interval '14 days' GROUP BY dt" +
+                ") sub ON sub.dt = d.date ORDER BY d.date");
+        result.put("messageTrend", msgTrend);
+
+        return ResponseEntity.ok(result);
+    }
+
+    // ── Social Graph Stats ──────────────────────────────────────────────
+
+    @GetMapping("/analytics/social-graph")
+    public ResponseEntity<Map<String, Object>> socialGraphStats(Authentication auth) {
+        requireAdmin(auth);
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        Long totalFollows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM follows", Long.class);
+        result.put("totalFollows", totalFollows != null ? totalFollows : 0);
+
+        Long totalFriendRequests = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM friend_requests", Long.class);
+        result.put("totalFriendRequests", totalFriendRequests != null ? totalFriendRequests : 0);
+
+        Long pendingRequests = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM friend_requests WHERE status = 'PENDING'", Long.class);
+        result.put("pendingFriendRequests", pendingRequests != null ? pendingRequests : 0);
+
+        Long acceptedRequests = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM friend_requests WHERE status = 'ACCEPTED'", Long.class);
+        result.put("acceptedFriendRequests", acceptedRequests != null ? acceptedRequests : 0);
+
+        Long totalMemberships = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM memberships WHERE status = 'APPROVED'", Long.class);
+        result.put("totalMemberships", totalMemberships != null ? totalMemberships : 0);
+
+        // Average follows per user
+        Long totalUsers = userRepository.count();
+        result.put("avgFollowsPerUser", totalUsers > 0 && totalFollows != null
+                ? Math.round((double) totalFollows / totalUsers * 10) / 10.0 : 0);
+
+        // Most connected users (by follow count)
+        List<Map<String, Object>> mostFollowed = jdbcTemplate.queryForList(
+                "SELECT u.id, u.username, u.display_name, u.avatar_url, COUNT(f.follower_id) as follower_count " +
+                "FROM users u JOIN follows f ON u.id = f.followed_id " +
+                "GROUP BY u.id, u.username, u.display_name, u.avatar_url " +
+                "ORDER BY follower_count DESC LIMIT 10");
+        result.put("mostFollowed", mostFollowed);
+
+        return ResponseEntity.ok(result);
+    }
+
     // ── Engagement Over Time (Group/Page/User) ──────────────────────────
 
     @GetMapping("/analytics/engagement")

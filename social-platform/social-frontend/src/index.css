@@ -2,11 +2,163 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme Definitions ── */
+
+:root,
+:root[data-theme="modern-collaboration"] {
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #4f46e5;
+  --color-primary-600: #4338ca;
+  --color-primary-700: #3730a3;
+  --color-primary-800: #312e81;
+  --color-primary-900: #272566;
+
+  --color-accent-50: #f0fdfa;
+  --color-accent-100: #ccfbf1;
+  --color-accent-200: #99f6e4;
+  --color-accent-300: #5eead4;
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #14b8a6;
+  --color-accent-600: #0d9488;
+  --color-accent-700: #0f766e;
+
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+}
+
+:root[data-theme="serious-enterprise"] {
+  --color-primary-50: #f0f4f8;
+  --color-primary-100: #d9e2ec;
+  --color-primary-200: #bcccdc;
+  --color-primary-300: #9fb3c8;
+  --color-primary-400: #829ab1;
+  --color-primary-500: #1b3a5c;
+  --color-primary-600: #163250;
+  --color-primary-700: #102a43;
+  --color-primary-800: #0b2137;
+  --color-primary-900: #071a2b;
+
+  --color-accent-50: #e8f4f8;
+  --color-accent-100: #d1e9f0;
+  --color-accent-200: #b0d5e3;
+  --color-accent-300: #8ec1d6;
+  --color-accent-400: #6badc9;
+  --color-accent-500: #4a90b0;
+  --color-accent-600: #3a7a9a;
+  --color-accent-700: #2d6584;
+
+  --color-gray-50: #f7f9fb;
+  --color-gray-100: #edf1f5;
+  --color-gray-200: #dce3eb;
+  --color-gray-300: #c5ced8;
+  --color-gray-400: #9aa5b4;
+  --color-gray-500: #6e7a89;
+  --color-gray-600: #515d6b;
+  --color-gray-700: #3b4654;
+  --color-gray-800: #27303d;
+  --color-gray-900: #1a212b;
+}
+
+:root[data-theme="premium-culture"] {
+  --color-primary-50: #f5f0f7;
+  --color-primary-100: #e8dced;
+  --color-primary-200: #d4bfe0;
+  --color-primary-300: #b896cc;
+  --color-primary-400: #9c6db8;
+  --color-primary-500: #6b2fa0;
+  --color-primary-600: #5a2888;
+  --color-primary-700: #4a2170;
+  --color-primary-800: #3a1a58;
+  --color-primary-900: #2b1340;
+
+  --color-accent-50: #fdf9ef;
+  --color-accent-100: #faf0d5;
+  --color-accent-200: #f5e1ab;
+  --color-accent-300: #efd182;
+  --color-accent-400: #e6bc4f;
+  --color-accent-500: #c9a032;
+  --color-accent-600: #a88428;
+  --color-accent-700: #876a20;
+
+  --color-gray-50: #f6f5f7;
+  --color-gray-100: #ededf0;
+  --color-gray-200: #dcdce1;
+  --color-gray-300: #c4c4cc;
+  --color-gray-400: #9696a3;
+  --color-gray-500: #6b6b7a;
+  --color-gray-600: #515161;
+  --color-gray-700: #3b3b4a;
+  --color-gray-800: #272735;
+  --color-gray-900: #1a1a24;
+}
+
+:root[data-theme="worksphere"] {
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #4338ca;
+  --color-primary-600: #3730a3;
+  --color-primary-700: #312e81;
+  --color-primary-800: #272566;
+  --color-primary-900: #1e1b4b;
+
+  --color-accent-50: #f0fdfa;
+  --color-accent-100: #ccfbf1;
+  --color-accent-200: #99f6e4;
+  --color-accent-300: #5eead4;
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #0d9488;
+  --color-accent-600: #0f766e;
+  --color-accent-700: #115e59;
+
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+}
+
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
       'Helvetica Neue', Arial, sans-serif;
+  }
+
+  /* Themed header */
+  header {
+    background: var(--color-primary-900) !important;
+    border-color: var(--color-primary-800) !important;
+  }
+  header a, header button, header span, header input {
+    color: #fff;
+  }
+  header input {
+    background: var(--color-primary-800);
+    border-color: var(--color-primary-700);
+    color: #fff;
+  }
+  header input::placeholder {
+    color: rgba(255,255,255,0.5);
   }
 }
 

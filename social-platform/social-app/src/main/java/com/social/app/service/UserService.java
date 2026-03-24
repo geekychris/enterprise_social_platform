@@ -56,18 +56,44 @@ public class UserService {
     public UserDto toDto(UserEntity entity) {
         long followerCount = followRepository.countByFollowedId(entity.getId());
         long followingCount = followRepository.countByFollowerId(entity.getId());
+
+        String managerName = null;
+        if (entity.getManagerId() != null) {
+            managerName = userRepository.findById(entity.getManagerId())
+                    .map(m -> m.getDisplayName() != null ? m.getDisplayName() : m.getUsername())
+                    .orElse(null);
+        }
+
         return new UserDto(
                 entity.getId(),
                 entity.getUsername(),
                 entity.getDisplayName(),
                 entity.getEmail(),
                 entity.getAvatarUrl(),
+                entity.getCoverUrl(),
                 entity.getBio(),
-                Visibility.valueOf(entity.getVisibility()),
+                entity.getVisibility(),
                 followerCount,
                 followingCount,
-                entity.isAdmin()
+                entity.isAdmin(),
+                entity.getPhone(),
+                entity.getLocation(),
+                entity.getJobTitle(),
+                entity.getDepartment(),
+                entity.getJoinedCompanyAt() != null ? entity.getJoinedCompanyAt().toString() : null,
+                entity.getManagerId(),
+                managerName,
+                entity.getInterests(),
+                entity.getSkills(),
+                entity.getLinkedinUrl(),
+                entity.getTimezone(),
+                entity.getPronouns()
         );
+    }
+
+    @Transactional
+    public UserEntity save(UserEntity entity) {
+        return userRepository.save(entity);
     }
 
     public UserSummaryDto toSummaryDto(UserEntity entity) {

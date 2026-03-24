@@ -13,6 +13,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switchSearch, setSwitchSearch] = useState('');
+  const [adminsOnly, setAdminsOnly] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const switcherRef = useRef<HTMLDivElement>(null);
 
@@ -40,9 +41,12 @@ export default function Header() {
     id: number; username: string; displayName: string; avatarUrl: string | null;
   }[]>({
     queryKey: ['switcher-users', switchSearch],
-    queryFn: () => api.get('/users/search', { params: { q: switchSearch || '' } }).then(r =>
-      (r.data as any[]).slice(0, 12)
-    ),
+    queryFn: () => api.get('/users/search', { params: { q: switchSearch || '' } }).then(r => {
+      const users = r.data as any[];
+      // Sort admins first, then take top results
+      users.sort((a: any, b: any) => (a.admin === b.admin ? 0 : a.admin ? -1 : 1));
+      return users.slice(0, 20);
+    }),
     enabled: debugMode && switcherOpen,
     staleTime: 30000,
   });
@@ -68,16 +72,13 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-14 bg-white shadow-sm border-b border-gray-100 z-30 flex items-center px-4 gap-4">
+    <header className="fixed top-0 left-0 right-0 h-20 bg-white shadow-sm border-b border-gray-100 z-30 flex items-center px-4 gap-4">
       {/* Logo */}
       <Link
         to="/"
-        className="flex items-center gap-2 font-bold text-primary-500 text-xl shrink-0"
+        className="flex items-center shrink-0"
       >
-        <div className="w-8 h-8 bg-primary-500 text-white rounded-lg flex items-center justify-center text-sm font-bold">
-          S
-        </div>
-        <span className="hidden sm:inline">Social</span>
+        <img src="/worksphere-logo.jpg" alt="WorkSphere" className="h-16 w-auto object-contain" />
       </Link>
 
       {/* Search */}
@@ -106,7 +107,7 @@ export default function Header() {
 
           {switcherOpen && (
             <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
-              <div className="p-2 border-b border-gray-100">
+              <div className="p-2 border-b border-gray-100 space-y-2">
                 <input
                   value={switchSearch}
                   onChange={e => setSwitchSearch(e.target.value)}
@@ -114,9 +115,21 @@ export default function Header() {
                   autoFocus
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
+                <label className="flex items-center gap-2 px-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={adminsOnly}
+                    onChange={e => setAdminsOnly(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                  />
+                  <span className="text-xs text-gray-600">Admins only</span>
+                </label>
               </div>
               <div className="max-h-80 overflow-y-auto">
-                {switcherUsers?.map(user => (
+                {(switcherUsers ?? [])
+                  .filter((user: any) => !adminsOnly || user.admin)
+                  .sort((a: any, b: any) => (a.admin === b.admin ? 0 : a.admin ? -1 : 1))
+                  .map((user: any) => (
                   <button
                     key={user.id}
                     onClick={() => switchAccount(user.id)}
@@ -132,7 +145,12 @@ export default function Header() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-gray-900 truncate">{user.displayName}</div>
+                      <div className="text-sm font-medium text-gray-900 truncate flex items-center gap-1.5">
+                        {user.displayName}
+                        {user.admin && (
+                          <span className="text-[9px] bg-red-100 text-red-700 px-1 py-0.5 rounded font-bold leading-none">ADMIN</span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-400">@{user.username}</div>
                     </div>
                     {user.id === userId && (
@@ -142,8 +160,10 @@ export default function Header() {
                     )}
                   </button>
                 ))}
-                {switcherUsers?.length === 0 && (
-                  <div className="px-4 py-6 text-center text-sm text-gray-400">No users found</div>
+                {((switcherUsers ?? []).filter((u: any) => !adminsOnly || u.admin).length === 0) && (
+                  <div className="px-4 py-6 text-center text-sm text-gray-400">
+                    {adminsOnly ? 'No admin users found' : 'No users found'}
+                  </div>
                 )}
               </div>
             </div>
