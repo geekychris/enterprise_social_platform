@@ -136,9 +136,7 @@ export default function CreatePostForm({ defaultTargetType, defaultTargetId }: C
       for (const { file } of filePreviews) {
         const form = new FormData();
         form.append('file', file);
-        const { data } = await api.post('/attachments/upload', form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        const { data } = await api.post('/attachments/upload', form);
         attachmentIds.push(data.id);
       }
 

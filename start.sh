@@ -143,10 +143,13 @@ if [ -f "$LOG_DIR/social-app.pid" ]; then
     kill "$(cat "$LOG_DIR/social-app.pid")" 2>/dev/null || true
 fi
 
+UPLOAD_DIR="$SCRIPT_DIR/uploads"
+mkdir -p "$UPLOAD_DIR"
 java -jar social-app/target/social-app-1.0.0-SNAPSHOT.jar \
     --spring.datasource.url=jdbc:postgresql://localhost:5432/social_enterprise \
     --spring.datasource.username=social \
     --spring.datasource.password=social_dev_password \
+    --social.media.upload-dir="$UPLOAD_DIR" \
     > "$LOG_DIR/social-app.log" 2>&1 &
 echo $! > "$LOG_DIR/social-app.pid"
 

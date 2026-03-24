@@ -25,14 +25,43 @@ export default function UserProfile({ userId }: Props) {
     },
   });
 
+  // Friend / follow status
+  const { data: friendStatus } = useQuery<{ status: string; requestId?: number }>({
+    queryKey: ['friend-status', userId],
+    queryFn: () => api.get(`/friend-requests/status/${userId}`).then(r => r.data),
+    enabled: !isOwnProfile,
+  });
+
+  const invalidateRelationship = () => {
+    queryClient.invalidateQueries({ queryKey: ['user', userId] });
+    queryClient.invalidateQueries({ queryKey: ['friend-status', userId] });
+    queryClient.removeQueries({ queryKey: ['following', currentUserId] });
+    queryClient.invalidateQueries({ queryKey: ['following'] });
+  };
+
   const follow = useMutation({
     mutationFn: () => api.post(`/follow/${userId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+    onSuccess: invalidateRelationship,
   });
 
   const unfollow = useMutation({
     mutationFn: () => api.delete(`/follow/${userId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+    onSuccess: invalidateRelationship,
+  });
+
+  const sendFriendRequest = useMutation({
+    mutationFn: () => api.post(`/friend-requests/${userId}`),
+    onSuccess: () => queryClient.refetchQueries({ queryKey: ['friend-status', userId] }),
+  });
+
+  const acceptFriendRequest = useMutation({
+    mutationFn: () => api.post(`/friend-requests/${friendStatus?.requestId}/accept`),
+    onSuccess: invalidateRelationship,
+  });
+
+  const rejectFriendRequest = useMutation({
+    mutationFn: () => api.post(`/friend-requests/${friendStatus?.requestId}/reject`),
+    onSuccess: () => queryClient.refetchQueries({ queryKey: ['friend-status', userId] }),
   });
 
   if (isLoading) {
@@ -92,13 +121,52 @@ export default function UserProfile({ userId }: Props) {
                 </svg>
                 Message
               </button>
-              <button
-                onClick={() => follow.mutate()}
-                disabled={follow.isPending}
-                className="btn-primary text-sm"
-              >
-                Follow
-              </button>
+              {friendStatus?.status === 'FRIENDS' ? (
+                <span className="text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Friends
+                </span>
+              ) : friendStatus?.status === 'REQUEST_SENT' ? (
+                <span className="text-sm bg-gray-100 text-gray-500 px-3 py-1.5 rounded-lg font-medium">
+                  Request Sent
+                </span>
+              ) : friendStatus?.status === 'REQUEST_RECEIVED' ? (
+                <>
+                  <button
+                    onClick={() => acceptFriendRequest.mutate()}
+                    disabled={acceptFriendRequest.isPending}
+                    className="btn-primary text-sm"
+                  >
+                    Accept Request
+                  </button>
+                  <button
+                    onClick={() => rejectFriendRequest.mutate()}
+                    disabled={rejectFriendRequest.isPending}
+                    className="text-sm border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Decline
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => sendFriendRequest.mutate()}
+                    disabled={sendFriendRequest.isPending}
+                    className="btn-primary text-sm"
+                  >
+                    {sendFriendRequest.isPending ? 'Sending...' : 'Add Friend'}
+                  </button>
+                  <button
+                    onClick={() => follow.mutate()}
+                    disabled={follow.isPending}
+                    className="text-sm border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Follow
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

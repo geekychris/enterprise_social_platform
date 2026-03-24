@@ -35,9 +35,7 @@ export default function Sidebar() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const { data } = await api.post('/attachments/upload', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const { data } = await api.post('/attachments/upload', form);
       setNewAvatarUrl(data.fileUrl);
     } catch {
       // silently fail
@@ -358,7 +356,7 @@ export default function Sidebar() {
         </h3>
         {following && following.length > 0 ? (
           <div className="space-y-0.5">
-            {following.slice(0, 10).map((user) => (
+            {following.map((user) => (
               <div
                 key={user.id}
                 className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"

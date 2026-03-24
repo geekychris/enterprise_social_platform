@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../hooks/useAuth';
 import api from '../../api/client';
 import type { GroupDto, PageDto, SearchResultDto, FriendRequestDto } from '../../api/types';
 
 export default function RightPanel() {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
 
   const { data: myGroups } = useQuery<GroupDto[]>({
     queryKey: ['my-groups'],
@@ -54,7 +56,9 @@ export default function RightPanel() {
     allGroups?.filter((g) => !myGroupIds.has(String(g.id))).slice(0, 5) ?? [];
 
   const suggestedPages = allPages?.slice(0, 5) ?? [];
-  const suggestedPeople = searchResults?.hits?.slice(0, 5) ?? [];
+  const suggestedPeople = searchResults?.hits
+    ?.filter((p) => String(p.id) !== String(userId))
+    .slice(0, 5) ?? [];
 
   return (
     <aside className="fixed right-0 top-14 bottom-0 w-72 bg-white border-l border-gray-100 pt-4 hidden xl:block z-20 overflow-y-auto">
@@ -161,12 +165,14 @@ export default function RightPanel() {
 
 function FriendRequestCard({ request }: { request: FriendRequestDto }) {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
 
   const accept = useMutation({
     mutationFn: () => api.post(`/friend-requests/${request.id}/accept`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['friend-requests-received'] });
-      queryClient.invalidateQueries({ queryKey: ['friends'] });
+      queryClient.removeQueries({ queryKey: ['following', userId] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
@@ -223,9 +229,10 @@ function FriendRequestCard({ request }: { request: FriendRequestDto }) {
 
 function SuggestedPerson({ person }: { person: { id: number; name: string; description: string | null; avatarUrl: string | null } }) {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
   const [error, setError] = useState(false);
 
-  const { data: serverStatus } = useQuery<{ status: string }>({
+  const { data: serverStatus } = useQuery<{ status: string; requestId?: number }>({
     queryKey: ['friend-status', person.id],
     queryFn: async () => {
       const { data } = await api.get(`/friend-requests/status/${person.id}`);
@@ -246,18 +253,26 @@ function SuggestedPerson({ person }: { person: { id: number; name: string; descr
     },
   });
 
+  const invalidateAll = () => {
+    queryClient.refetchQueries({ queryKey: ['friend-status', person.id] });
+    queryClient.invalidateQueries({ queryKey: ['friend-requests-received'] });
+    queryClient.removeQueries({ queryKey: ['following', userId] });
+    queryClient.invalidateQueries({ queryKey: ['following'] });
+    queryClient.invalidateQueries({ queryKey: ['feed'] });
+  };
+
+  const acceptRequest = useMutation({
+    mutationFn: () => api.post(`/friend-requests/${serverStatus?.requestId}/accept`),
+    onSuccess: invalidateAll,
+  });
+
+  const rejectRequest = useMutation({
+    mutationFn: () => api.post(`/friend-requests/${serverStatus?.requestId}/reject`),
+    onSuccess: invalidateAll,
+  });
+
   const status = serverStatus?.status ?? 'NONE';
-  const alreadySent = status === 'REQUEST_SENT' || status === 'FRIENDS' || status === 'REQUEST_RECEIVED';
-  const buttonDisabled = sendRequest.isPending || alreadySent;
-  const buttonText = error
-    ? 'Failed - Retry'
-    : status === 'REQUEST_SENT'
-      ? 'Requested'
-      : status === 'FRIENDS'
-        ? 'Friends'
-        : status === 'REQUEST_RECEIVED'
-          ? 'Respond to Request'
-          : 'Add Friend';
+  const isPending = sendRequest.isPending || acceptRequest.isPending || rejectRequest.isPending;
 
   return (
     <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors">
@@ -283,24 +298,51 @@ function SuggestedPerson({ person }: { person: { id: number; name: string; descr
             {person.description}
           </p>
         )}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setError(false);
-            sendRequest.mutate();
-          }}
-          disabled={buttonDisabled}
-          className={`mt-1 w-full px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-            error
-              ? 'bg-red-50 text-red-600 hover:bg-red-100'
-              : buttonDisabled
-                ? 'bg-gray-100 text-gray-400 cursor-default'
+
+        {/* Accept/Reject buttons when request received */}
+        {status === 'REQUEST_RECEIVED' ? (
+          <div className="flex gap-1.5 mt-1">
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); acceptRequest.mutate(); }}
+              disabled={isPending}
+              className="flex-1 px-2 py-1 bg-primary-500 text-white text-xs font-medium rounded-md hover:bg-primary-600 disabled:opacity-50 transition-colors"
+            >
+              {acceptRequest.isPending ? '...' : 'Accept'}
+            </button>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); rejectRequest.mutate(); }}
+              disabled={isPending}
+              className="flex-1 px-2 py-1 bg-gray-200 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-300 disabled:opacity-50 transition-colors"
+            >
+              {rejectRequest.isPending ? '...' : 'Decline'}
+            </button>
+          </div>
+        ) : status === 'FRIENDS' ? (
+          <div className="mt-1 w-full px-2 py-1 text-xs font-medium rounded-md bg-green-50 text-green-600 text-center">
+            Friends
+          </div>
+        ) : status === 'REQUEST_SENT' ? (
+          <div className="mt-1 w-full px-2 py-1 text-xs font-medium rounded-md bg-gray-100 text-gray-400 text-center">
+            Requested
+          </div>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setError(false);
+              sendRequest.mutate();
+            }}
+            disabled={isPending}
+            className={`mt-1 w-full px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+              error
+                ? 'bg-red-50 text-red-600 hover:bg-red-100'
                 : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
-          }`}
-        >
-          {sendRequest.isPending ? 'Sending...' : buttonText}
-        </button>
+            }`}
+          >
+            {sendRequest.isPending ? 'Sending...' : error ? 'Failed - Retry' : 'Add Friend'}
+          </button>
+        )}
       </div>
     </div>
   );

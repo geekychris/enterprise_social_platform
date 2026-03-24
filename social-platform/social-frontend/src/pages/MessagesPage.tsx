@@ -224,19 +224,20 @@ function MessageThread({
 
   const sendMessage = useMutation({
     mutationFn: async () => {
+      const currentFiles = files;
+      const currentText = messageText;
+
       const attachmentIds: number[] = [];
-      for (const file of files) {
+      for (const file of currentFiles) {
         const form = new FormData();
         form.append('file', file);
-        const { data } = await api.post('/attachments/upload', form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        const { data } = await api.post('/attachments/upload', form);
         attachmentIds.push(data.id);
       }
 
       return api.post('/messages', {
         recipientId: partnerId,
-        content: messageText,
+        content: currentText || '',
         attachmentIds: attachmentIds.length ? attachmentIds : undefined,
       });
     },
@@ -246,11 +247,16 @@ function MessageThread({
       queryClient.invalidateQueries({ queryKey: ['messages', partnerId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
+    onError: (err) => {
+      console.error('Failed to send message:', err);
+    },
   });
+
+  const canSend = (messageText.trim().length > 0 || files.length > 0) && !sendMessage.isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageText.trim() && files.length === 0) return;
+    if (!canSend) return;
     sendMessage.mutate();
   };
 
@@ -375,16 +381,24 @@ function MessageThread({
       {files.length > 0 && (
         <div className="px-4 py-2 bg-white border-t border-gray-100 flex gap-2 flex-wrap">
           {files.map((f, i) => (
-            <div key={i} className="relative group">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <span className="text-[10px] text-gray-500 truncate w-10 text-center">
-                  {f.name.slice(0, 8)}
-                </span>
-              </div>
+            <div key={`${f.name}-${i}`} className="relative group">
+              {f.type.startsWith('image/') ? (
+                <img
+                  src={URL.createObjectURL(f)}
+                  alt={f.name}
+                  className="w-14 h-14 object-cover rounded-lg border border-gray-200"
+                />
+              ) : (
+                <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                  <span className="text-[10px] text-gray-500 truncate w-12 text-center">
+                    {f.name.slice(0, 10)}
+                  </span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center shadow hover:bg-red-600"
               >
                 x
               </button>
@@ -393,25 +407,39 @@ function MessageThread({
         </div>
       )}
 
-      {/* Input */}
+      {/* Input area with drag-and-drop */}
       <form
         onSubmit={handleSubmit}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.dataTransfer.files.length > 0) {
+            setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]);
+          }
+        }}
         className="p-3 bg-white border-t border-gray-100 flex items-center gap-2"
       >
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          className="hidden"
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+          style={{ position: 'absolute', left: -9999, opacity: 0, width: 1, height: 1 }}
           onChange={(e) => {
-            if (e.target.files) setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+            const newFiles = Array.from(e.target.files ?? []);
+            if (newFiles.length > 0) {
+              setFiles((prev) => [...prev, ...newFiles]);
+            }
+            // Reset after copying so same file can be selected again
             e.target.value = '';
           }}
         />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 text-gray-400 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-colors"
+          className="p-2 text-gray-400 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-colors shrink-0"
+          title="Attach file"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -421,12 +449,12 @@ function MessageThread({
           type="text"
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
-          placeholder="Type a message..."
+          placeholder={files.length > 0 ? 'Add a message (optional)...' : 'Type a message...'}
           className="input-field flex-1"
         />
         <button
           type="submit"
-          disabled={(!messageText.trim() && files.length === 0) || sendMessage.isPending}
+          disabled={!canSend}
           className="btn-primary text-sm px-4"
         >
           {sendMessage.isPending ? (
