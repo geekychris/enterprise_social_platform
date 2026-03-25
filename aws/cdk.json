@@ -1,0 +1,10 @@
+{
+  "app": "npx ts-node lib/app.ts",
+  "context": {
+    "environment": "dev",
+    "dbInstanceClass": "db.t3.medium",
+    "dbAllocatedStorage": 20,
+    "appDesiredCount": 2,
+    "frontendDesiredCount": 2
+  }
+}

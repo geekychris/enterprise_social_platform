@@ -449,3 +449,161 @@ sequenceDiagram
 | Comment depth limit (1) | Prevents deeply nested threads; simpler UI |
 | Content-hash deduplication | Saves storage for identical file uploads |
 | 80/20 organic/recommended feed | Discovery without overwhelming organic content |
+
+---
+
+## 9. AOEE Integration Deep Dive
+
+AOEE (Attribute Object Enterprise Edition) is used as a **vanilla, unmodified dependency** — fetched from GitHub at build time with zero source code changes. The social platform integrates with it through two complementary patterns:
+
+### 9.1 Integration Architecture
+
+```mermaid
+graph TB
+    subgraph "Social Platform (social-app :8080)"
+        GS["GraphSyncService<br/>@Async @EventListener"]
+        GC["AoeeGraphClient<br/>(REST client)"]
+        PC["AoeePersistenceController<br/>/api/v1/edges"]
+        DB["PostgreSQL<br/>graph_edges table"]
+    end
+
+    subgraph "AOEE Stack (vanilla, unmodified)"
+        Proxy["AOEE Spring Proxy :8082<br/>(REST → gRPC gateway)"]
+        Server["AOEE Rust Server :50051<br/>(in-memory graph cache)"]
+    end
+
+    GS -->|"domain events"| GC
+    GC -->|"REST: add/remove/query edges"| Proxy
+    Proxy -->|"gRPC"| Server
+    Server -->|"HTTP callback<br/>write-through persist"| PC
+    PC --> DB
+```
+
+### 9.2 Pattern 1: Social Platform as AOEE Client
+
+`AoeeGraphClient.java` is a Spring `RestClient` wrapper that calls AOEE's native REST proxy API. All methods include graceful degradation — they catch exceptions and return empty results so the platform works even when AOEE is unavailable.
+
+**Edge mutations** (called by `GraphSyncService`):
+| Method | AOEE Endpoint | Purpose |
+|--------|--------------|---------|
+| `addEdge(src, type, dst)` | `POST /api/edges` | Create a relationship |
+| `addEdgeWithMetadata(src, type, dst, meta)` | `POST /api/edges` | Create with metadata (e.g., reaction type) |
+| `removeEdge(src, type, dst)` | `DELETE /api/edges` | Remove a relationship |
+
+**Edge queries** (called by services and controllers):
+| Method | AOEE Endpoint | Purpose |
+|--------|--------------|---------|
+| `getNeighbors(src, type)` | `GET /api/edges/{src}/{type}` | List connected nodes |
+| `contains(src, type, dst)` | `GET /api/edges/{src}/{type}/contains/{dst}` | Check if edge exists |
+| `count(src, type)` | `GET /api/edges/{src}/{type}/count` | Count edges |
+
+**Graph queries** (called by `GraphExplorerController` and `RecommendationService`):
+| Method | AOEE Endpoint | Purpose |
+|--------|--------------|---------|
+| `friendOfFriend(src, type, max, minScore)` | `POST /api/query/fof` | FOF with scoring |
+| `mutualFriends(id1, id2, type)` | `POST /api/query/mutual-friends` | Shared connections |
+| `intersect(id1, id2, type)` | `POST /api/query/intersect` | Set intersection |
+| `union(id1, id2, type)` | `POST /api/query/union` | Set union |
+| `getStats()` | `GET /api/stats` | Cache statistics |
+
+### 9.3 Pattern 2: Social Platform as AOEE Persistence Backend
+
+When AOEE is configured with `AOEE_STORAGE_TYPE=http`, the Rust server calls back to the social platform to persist edges. `AoeePersistenceController.java` exposes the REST API that AOEE expects at `/api/v1/`:
+
+```mermaid
+sequenceDiagram
+    participant App as Social App
+    participant Proxy as AOEE Proxy
+    participant Server as AOEE Server
+    participant Persist as /api/v1/edges
+
+    App->>Proxy: POST /api/edges (add FOLLOWS edge)
+    Proxy->>Server: gRPC AddEdge
+    Server->>Server: Store in memory cache
+    Server->>Persist: HTTP POST /api/v1/edges (write-through)
+    Persist->>Persist: INSERT INTO graph_edges
+    Server-->>Proxy: OK
+    Proxy-->>App: {"success": true}
+```
+
+**Persistence endpoints** (no auth required — `/api/v1/**` is public):
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/edges` | Persist a single edge |
+| `POST /api/v1/edges/batch` | Persist multiple edges |
+| `DELETE /api/v1/edges/{src}/{type}/{dst}` | Delete an edge |
+| `GET /api/v1/edges?src=&type=` | Query persisted edges |
+| `GET /api/v1/edges/count?src=&type=` | Count persisted edges |
+| `POST /api/v1/entities` | Persist entity metadata |
+| `POST /api/v1/entities/batch` | Batch persist entities |
+| `GET /api/v1/export/stats` | Graph statistics |
+
+### 9.4 Event-Driven Sync
+
+`GraphSyncService` listens to Spring application events and syncs to AOEE asynchronously:
+
+```mermaid
+flowchart LR
+    subgraph "Domain Events"
+        FE["FollowEvent"]
+        PE["PostCreatedEvent"]
+        RE["ReactionEvent"]
+        ME["MembershipEvent"]
+    end
+
+    subgraph "AOEE Edge Types"
+        F["FOLLOWS<br/>user → user"]
+        A["AUTHORED<br/>user → post"]
+        C["CONTAINS<br/>group → post"]
+        L["LIKES<br/>user → post"]
+        M["MEMBER_OF<br/>user → group"]
+    end
+
+    FE --> F
+    PE --> A
+    PE --> C
+    RE --> L
+    ME --> M
+```
+
+All sync operations are `@Async` to avoid blocking the main request thread. If AOEE is unavailable, errors are logged but the main operation succeeds.
+
+### 9.5 Backfill
+
+The admin Graph Explorer includes a **"Load DB into AOEE"** button (`POST /api/admin/graph/backfill`) that reads all follows, reactions, posts, and memberships from PostgreSQL and pushes them to AOEE. This is used when:
+- AOEE is started fresh (in-memory cache is empty)
+- Data was generated before AOEE was running
+- AOEE was restarted and lost its cache
+
+### 9.6 Configuration
+
+```yaml
+# application.yml
+social:
+  aoee:
+    host: localhost        # AOEE proxy hostname
+    port: 50051            # AOEE gRPC port (not used directly)
+    proxy-port: 8082       # AOEE REST proxy port
+```
+
+```yaml
+# docker-compose.yml - AOEE server
+aoee-server:
+  environment:
+    AOEE_LISTEN_ADDR: "0.0.0.0:50051"
+    AOEE_STORAGE_TYPE: memory        # or "http" for write-through
+    AOEE_HTTP_URL: "http://host.docker.internal:8080"  # social-app callback
+    AOEE_WRITE_THROUGH: "false"      # "true" to persist via HTTP
+```
+
+### 9.7 Graceful Degradation
+
+Every `AoeeGraphClient` method wraps calls in try/catch and returns safe defaults:
+- `getNeighbors()` → empty list
+- `contains()` → false
+- `count()` → 0
+- `friendOfFriend()` → empty candidates
+- `isAvailable()` → false
+
+The platform is fully functional without AOEE — feed assembly, reactions, follows, and friend requests all work via PostgreSQL. AOEE adds performance for graph traversals and enables features like the admin Graph Explorer.

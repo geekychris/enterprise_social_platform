@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: uploads-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/worksphere/uploads
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+  namespace: worksphere
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-app
+  namespace: worksphere
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: social-app
+  template:
+    metadata:
+      labels:
+        app: social-app
+    spec:
+      containers:
+        - name: social-app
+          image: worksphere/social-app:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/social_enterprise"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "social"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: worksphere-secrets
+                  key: postgres-password
+            - name: SOCIAL_AOEE_HOST
+              value: "aoee-proxy"
+            - name: SOCIAL_AOEE_PROXY_PORT
+              value: "8082"
+            - name: SOCIAL_OPENSEARCH_HOST
+              value: "opensearch"
+            - name: SOCIAL_OPENSEARCH_PORT
+              value: "9200"
+            - name: SOCIAL_MEDIA_UPLOAD_DIR
+              value: "/data/uploads"
+            - name: SOCIAL_AUTH_DEBUG_BYPASS
+              value: "false"
+            - name: SOCIAL_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: worksphere-secrets
+                  key: jwt-secret
+          volumeMounts:
+            - name: uploads
+              mountPath: /data/uploads
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: uploads-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: social-app
+  namespace: worksphere
+spec:
+  selector:
+    app: social-app
+  ports:
+    - port: 8080
+      targetPort: 8080

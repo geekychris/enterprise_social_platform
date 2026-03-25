@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aoee-server
+  namespace: worksphere
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aoee-server
+  template:
+    metadata:
+      labels:
+        app: aoee-server
+    spec:
+      containers:
+        - name: aoee-server
+          image: worksphere/aoee-server:latest
+          ports:
+            - containerPort: 50051
+          env:
+            - name: AOEE_LISTEN_ADDR
+              value: "0.0.0.0:50051"
+            - name: AOEE_STORAGE_TYPE
+              value: "http"
+            - name: AOEE_HTTP_URL
+              value: "http://social-app:8080"
+            - name: AOEE_WRITE_THROUGH
+              value: "true"
+            - name: RUST_LOG
+              value: "info"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aoee-server
+  namespace: worksphere
+spec:
+  selector:
+    app: aoee-server
+  ports:
+    - port: 50051
+      targetPort: 50051
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aoee-proxy
+  namespace: worksphere
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aoee-proxy
+  template:
+    metadata:
+      labels:
+        app: aoee-proxy
+    spec:
+      containers:
+        - name: aoee-proxy
+          image: worksphere/aoee-proxy:latest
+          ports:
+            - containerPort: 8082
+          env:
+            - name: AOEE_HOST
+              value: "aoee-server"
+            - name: AOEE_PORT
+              value: "50051"
+            - name: SERVER_PORT
+              value: "8082"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /api/stats
+              port: 8082
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aoee-proxy
+  namespace: worksphere
+spec:
+  selector:
+    app: aoee-proxy
+  ports:
+    - port: 8082
+      targetPort: 8082

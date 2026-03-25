@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: worksphere
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - postgres.yaml
+  - opensearch.yaml
+  - aoee.yaml
+  - social-app.yaml
+  - frontend.yaml
+  - ingress.yaml
