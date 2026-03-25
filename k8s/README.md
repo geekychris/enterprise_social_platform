@@ -30,17 +30,16 @@ docker build -t worksphere/aoee-proxy:latest -f Dockerfile.proxy .
 ## Deploy
 
 ```bash
-# Create host directories for persistent data
-sudo mkdir -p /data/worksphere/postgres
-sudo mkdir -p /data/worksphere/uploads
+# Default: uses ~/data/worksphere
+./k8s/deploy.sh
 
-# Apply all resources
-kubectl apply -k k8s/
-
-# Watch rollout
-kubectl -n worksphere rollout status deployment/social-app
-kubectl -n worksphere rollout status deployment/frontend
+# Custom data directory
+WORKSPHERE_DATA_DIR=/mnt/storage/worksphere ./k8s/deploy.sh
 ```
+
+The `WORKSPHERE_DATA_DIR` environment variable controls where persistent data is stored
+on the host. It defaults to `$HOME/data/worksphere`. The deploy script creates the
+directories automatically.
 
 ## Verify
 
@@ -63,8 +62,8 @@ Then visit: http://worksphere.local
 
 | Data | Host Path | Purpose |
 |------|-----------|---------|
-| PostgreSQL | `/data/worksphere/postgres` | Database files |
-| Uploads | `/data/worksphere/uploads` | User-uploaded images and files |
+| PostgreSQL | `$WORKSPHERE_DATA_DIR/postgres` | Database files |
+| Uploads | `$WORKSPHERE_DATA_DIR/uploads` | User-uploaded images and files |
 
 Both use `hostPath` volumes with `Retain` reclaim policy — data persists across pod restarts and redeployments.
 
@@ -90,5 +89,5 @@ Update `k8s/secrets.yaml` before deploying to production:
 
 ```bash
 kubectl delete -k k8s/
-# Data in /data/worksphere/ is preserved (Retain policy)
+# Data in your worksphere data directory is preserved (Retain policy)
 ```

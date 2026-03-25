@@ -8,7 +8,7 @@ spec:
   accessModes:
     - ReadWriteMany
   hostPath:
-    path: /data/worksphere/uploads
+    path: ${WORKSPHERE_DATA_DIR}/uploads
   persistentVolumeReclaimPolicy: Retain
 ---
 apiVersion: v1
