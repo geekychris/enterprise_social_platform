@@ -40,7 +40,8 @@ spec:
     spec:
       containers:
         - name: social-app
-          image: worksphere/social-app:latest
+          image: docker.io/worksphere/social-app:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           env:
@@ -64,7 +65,7 @@ spec:
             - name: SOCIAL_MEDIA_UPLOAD_DIR
               value: "/data/uploads"
             - name: SOCIAL_AUTH_DEBUG_BYPASS
-              value: "false"
+              value: "true"
             - name: SOCIAL_JWT_SECRET
               valueFrom:
                 secretKeyRef:

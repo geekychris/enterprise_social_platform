@@ -15,7 +15,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: worksphere/frontend:latest
+          image: docker.io/worksphere/frontend:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 80
           resources:

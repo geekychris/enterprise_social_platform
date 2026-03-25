@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: datagen
+  namespace: worksphere
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: datagen
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: datagen
+          image: docker.io/worksphere/datagen:latest
+          imagePullPolicy: Never
+          args:
+            - "--spring.datasource.url=jdbc:postgresql://postgres:5432/social_enterprise"
+            - "--spring.datasource.username=social"
+            - "--spring.datasource.password=social_dev_password"
+            - "--datagen.aoee.base-url=http://aoee-proxy:8081"
+            - "--mode=${DATAGEN_MODE}"
+            - "--aoee-sync=true"

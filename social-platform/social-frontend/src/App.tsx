@@ -12,6 +12,7 @@ import MessagesPage from './pages/MessagesPage';
 import AboutPage from './pages/AboutPage';
 import AdminPage from './pages/AdminPage';
 import PostPage from './pages/PostPage';
+import SetupPage from './pages/SetupPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => !!s.token || !!s.debugUserId);
@@ -23,6 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/setup/:token" element={<SetupPage />} />
       <Route
         path="/*"
         element={

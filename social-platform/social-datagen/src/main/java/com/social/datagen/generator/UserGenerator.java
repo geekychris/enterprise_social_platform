@@ -28,8 +28,8 @@ public class UserGenerator {
 
     private static final String INSERT_SQL =
             "INSERT INTO users (id, username, display_name, email, password_hash, " +
-            "avatar_url, bio, visibility, created_at, updated_at) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            "avatar_url, bio, visibility, created_at, updated_at, is_admin) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private final JdbcTemplate jdbc;
     private final GlobalIdGenerator idGen;
@@ -124,6 +124,7 @@ public class UserGenerator {
                 ps.setString(8, visibility);
                 ps.setTimestamp(9, createdAt);
                 ps.setTimestamp(10, updatedAt);
+                ps.setBoolean(11, i < 3); // First 3 users are admins
                 ps.addBatch();
                 batchCount++;
 

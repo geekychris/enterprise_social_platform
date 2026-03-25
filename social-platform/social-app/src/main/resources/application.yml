@@ -40,3 +40,6 @@ social:
     port: 9200
   media:
     upload-dir: ./uploads
+  invite:
+    expiry-hours: 168
+    base-url: ${SOCIAL_INVITE_BASE_URL:}

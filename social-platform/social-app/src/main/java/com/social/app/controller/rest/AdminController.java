@@ -2,12 +2,14 @@ package com.social.app.controller.rest;
 
 import com.social.app.persistence.entity.UserEntity;
 import com.social.app.persistence.repository.*;
+import com.social.app.service.InviteService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -30,6 +32,7 @@ public class AdminController {
     private final ReactionRepository reactionRepository;
     private final AttachmentRepository attachmentRepository;
     private final MembershipRepository membershipRepository;
+    private final InviteService inviteService;
     private final JdbcTemplate jdbcTemplate;
 
     @Value("${social.upload-dir:./uploads}")
@@ -44,6 +47,7 @@ public class AdminController {
                            ReactionRepository reactionRepository,
                            AttachmentRepository attachmentRepository,
                            MembershipRepository membershipRepository,
+                           InviteService inviteService,
                            JdbcTemplate jdbcTemplate) {
         this.userRepository = userRepository;
         this.postRepository = postRepository;
@@ -54,6 +58,7 @@ public class AdminController {
         this.reactionRepository = reactionRepository;
         this.attachmentRepository = attachmentRepository;
         this.membershipRepository = membershipRepository;
+        this.inviteService = inviteService;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -534,17 +539,128 @@ public class AdminController {
         List<Map<String, Object>> result;
         if (q.isEmpty()) {
             result = jdbcTemplate.queryForList(
-                    "SELECT id, username, display_name, email, avatar_url, bio, visibility, is_admin, created_at " +
+                    "SELECT id, username, display_name, email, avatar_url, bio, visibility, is_admin, created_at, " +
+                    "department, job_title, " +
+                    "CASE WHEN password_hash IS NULL THEN 'PENDING_SETUP' ELSE 'ACTIVE' END as status " +
                     "FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?", size, page * size);
         } else {
             String pattern = "%" + q.toLowerCase() + "%";
             result = jdbcTemplate.queryForList(
-                    "SELECT id, username, display_name, email, avatar_url, bio, visibility, is_admin, created_at " +
+                    "SELECT id, username, display_name, email, avatar_url, bio, visibility, is_admin, created_at, " +
+                    "department, job_title, " +
+                    "CASE WHEN password_hash IS NULL THEN 'PENDING_SETUP' ELSE 'ACTIVE' END as status " +
                     "FROM users WHERE LOWER(username) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(email) LIKE ? " +
                     "ORDER BY created_at DESC LIMIT ? OFFSET ?", pattern, pattern, pattern, size, page * size);
         }
 
         return ResponseEntity.ok(result);
+    }
+
+    // ── Invite / Onboarding ──────────────────────────────────────────────
+
+    record InviteUserRequest(String email, String displayName, String department,
+                             String jobTitle, List<Long> groupIds, boolean admin) {}
+
+    @PostMapping("/users/invite")
+    public ResponseEntity<?> inviteUser(@RequestBody InviteUserRequest request, Authentication auth) {
+        requireAdmin(auth);
+        long adminId = (Long) auth.getPrincipal();
+        try {
+            Map<String, Object> result = inviteService.createInvitedUser(
+                    request.email(), request.displayName(), request.department(),
+                    request.jobTitle(), request.groupIds(), request.admin(), adminId);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/users/invite/batch")
+    public ResponseEntity<?> batchInvite(@RequestParam("file") MultipartFile file, Authentication auth) {
+        requireAdmin(auth);
+        long adminId = (Long) auth.getPrincipal();
+
+        try {
+            String content = new String(file.getBytes());
+            String[] lines = content.split("\n");
+            if (lines.length < 2) {
+                return ResponseEntity.badRequest().body(Map.of("message", "CSV must have a header row and at least one data row"));
+            }
+
+            // Parse header
+            String[] headers = lines[0].trim().split(",");
+            Map<String, Integer> headerMap = new LinkedHashMap<>();
+            for (int i = 0; i < headers.length; i++) {
+                headerMap.put(headers[i].trim().toLowerCase(), i);
+            }
+
+            if (!headerMap.containsKey("email")) {
+                return ResponseEntity.badRequest().body(Map.of("message", "CSV must have an 'email' column"));
+            }
+
+            // Parse rows
+            List<Map<String, String>> rows = new ArrayList<>();
+            for (int i = 1; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.isEmpty()) continue;
+                String[] cols = line.split(",", -1);
+                Map<String, String> row = new LinkedHashMap<>();
+                for (var entry : headerMap.entrySet()) {
+                    String val = entry.getValue() < cols.length ? cols[entry.getValue()].trim() : "";
+                    // Map common header names
+                    String key = switch (entry.getKey()) {
+                        case "email" -> "email";
+                        case "displayname", "display_name", "name" -> "displayName";
+                        case "department", "dept" -> "department";
+                        case "jobtitle", "job_title", "title" -> "jobTitle";
+                        case "groups", "group" -> "groups";
+                        case "admin" -> "admin";
+                        default -> entry.getKey();
+                    };
+                    row.put(key, val);
+                }
+                rows.add(row);
+            }
+
+            List<Map<String, Object>> results = inviteService.batchCreateInvitedUsers(rows, adminId);
+
+            long created = results.stream().filter(r -> "created".equals(r.get("status"))).count();
+            long failed = results.stream().filter(r -> "failed".equals(r.get("status"))).count();
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("created", created);
+            response.put("failed", failed);
+            response.put("total", rows.size());
+            response.put("results", results);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Failed to process CSV: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/invites")
+    public ResponseEntity<List<Map<String, Object>>> listInvites(Authentication auth) {
+        requireAdmin(auth);
+        return ResponseEntity.ok(inviteService.listInvites());
+    }
+
+    @PostMapping("/invites/{userId}/regenerate")
+    public ResponseEntity<Map<String, Object>> regenerateInvite(@PathVariable long userId, Authentication auth) {
+        requireAdmin(auth);
+        long adminId = (Long) auth.getPrincipal();
+        String token = inviteService.regenerateToken(userId, adminId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("userId", userId);
+        result.put("inviteToken", token);
+        result.put("inviteUrl", "/setup/" + token);
+        return ResponseEntity.ok(result);
+    }
+
+    @DeleteMapping("/invites/{tokenId}")
+    public ResponseEntity<Void> revokeInvite(@PathVariable long tokenId, Authentication auth) {
+        requireAdmin(auth);
+        inviteService.revokeToken(tokenId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/users/{id}")

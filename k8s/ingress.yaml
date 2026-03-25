@@ -8,8 +8,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 spec:
   rules:
-    - host: worksphere.local
-      http:
+    - http:
         paths:
           - path: /api
             pathType: Prefix

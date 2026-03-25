@@ -25,6 +25,10 @@ docker build -t worksphere/frontend:latest -f Dockerfile .
 cd ../../aoee
 docker build -t worksphere/aoee-server:latest -f Dockerfile .
 docker build -t worksphere/aoee-proxy:latest -f Dockerfile.proxy .
+
+# 4. Build datagen image (for --generate flag)
+cd ../social-platform
+docker build -t worksphere/datagen:latest -f Dockerfile.datagen .
 ```
 
 ## Deploy
@@ -33,6 +37,12 @@ docker build -t worksphere/aoee-proxy:latest -f Dockerfile.proxy .
 # Default: uses ~/data/worksphere
 ./k8s/deploy.sh
 
+# Deploy and generate test data (200 users, 2K posts, comments, reactions)
+./k8s/deploy.sh --generate
+
+# Deploy with large dataset (2K users, 20K posts)
+./k8s/deploy.sh --generate-large
+
 # Custom data directory
 WORKSPHERE_DATA_DIR=/mnt/storage/worksphere ./k8s/deploy.sh
 ```
@@ -40,6 +50,10 @@ WORKSPHERE_DATA_DIR=/mnt/storage/worksphere ./k8s/deploy.sh
 The `WORKSPHERE_DATA_DIR` environment variable controls where persistent data is stored
 on the host. It defaults to `$HOME/data/worksphere`. The deploy script creates the
 directories automatically.
+
+The `--generate` flag runs a Kubernetes Job after deployment that populates the database
+with realistic test data including users, groups, posts, comments, reactions, and
+social graph relationships. The first 3 users are admins (password: `password123`).
 
 ## Verify
 

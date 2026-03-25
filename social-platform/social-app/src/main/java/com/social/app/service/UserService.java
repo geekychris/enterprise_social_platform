@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -37,6 +38,22 @@ public class UserService {
         entity.setEmail(email);
         entity.setPasswordHash(passwordHash);
         entity.setBio(bio);
+        entity.setVisibility(Visibility.PUBLIC.name());
+        return userRepository.save(entity);
+    }
+
+    @Transactional
+    public UserEntity createInvited(String email, String displayName, String department,
+                                     String jobTitle, boolean admin) {
+        var entity = new UserEntity();
+        entity.setId(idGenerator.next(ObjectType.USER).value());
+        entity.setUsername("invite_" + UUID.randomUUID().toString().substring(0, 8));
+        entity.setDisplayName(displayName);
+        entity.setEmail(email);
+        entity.setPasswordHash(null);
+        entity.setDepartment(department);
+        entity.setJobTitle(jobTitle);
+        entity.setAdmin(admin);
         entity.setVisibility(Visibility.PUBLIC.name());
         return userRepository.save(entity);
     }

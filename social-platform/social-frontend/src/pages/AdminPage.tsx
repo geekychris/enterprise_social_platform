@@ -10,7 +10,7 @@ type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | '
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'engagement', label: 'Engagement' },
-  { key: 'users', label: 'Users' },
+  { key: 'users', label: 'User Management' },
   { key: 'content', label: 'Content' },
   { key: 'groups-pages', label: 'Groups & Pages' },
   { key: 'graph', label: 'Graph Explorer' },
@@ -701,6 +701,42 @@ function EngagementTab() {
 /* ────────────────────────── Users Tab ────────────────────────── */
 
 function UsersTab() {
+  const [subTab, setSubTab] = useState<'directory' | 'invite' | 'batch' | 'pending'>('directory');
+
+  const subTabs = [
+    { key: 'directory' as const, label: 'User Directory' },
+    { key: 'invite' as const, label: 'Invite User' },
+    { key: 'batch' as const, label: 'Batch Import' },
+    { key: 'pending' as const, label: 'Pending Invites' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {subTabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setSubTab(t.key)}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              subTab === t.key
+                ? 'bg-white shadow-sm text-gray-900 font-medium'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'directory' && <UserDirectorySection />}
+      {subTab === 'invite' && <InviteUserSection />}
+      {subTab === 'batch' && <BatchImportSection />}
+      {subTab === 'pending' && <PendingInvitesSection />}
+    </div>
+  );
+}
+
+function UserDirectorySection() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
@@ -708,32 +744,24 @@ function UsersTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', page, search],
     queryFn: () =>
-      api
-        .get('/admin/users', { params: { page, size: 20, q: search || undefined } })
-        .then((r) => r.data),
+      api.get('/admin/users', { params: { page, size: 20, q: search || undefined } }).then((r) => r.data),
     placeholderData: (prev: any) => prev,
   });
 
   const toggleAdmin = useMutation({
     mutationFn: (userId: string) => api.put(`/admin/users/${userId}/admin`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
   const users = data?.content ?? data?.users ?? (Array.isArray(data) ? data : []);
-  const totalPages = data?.totalPages ?? 1;
 
   return (
     <div className="space-y-4">
       <input
         type="text"
-        placeholder="Search users..."
+        placeholder="Search users by name, email..."
         value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setPage(0);
-        }}
+        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
         className="input-field max-w-sm"
       />
 
@@ -746,10 +774,10 @@ function UsersTab() {
               <thead>
                 <tr className="text-left text-gray-500 border-b bg-gray-50">
                   <th className="px-4 py-3">User</th>
-                  <th className="px-4 py-3">Display Name</th>
                   <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3 text-right">Posts</th>
-                  <th className="px-4 py-3 text-center">Admin</th>
+                  <th className="px-4 py-3">Department</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-center">Role</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
@@ -758,21 +786,34 @@ function UsersTab() {
                   <tr key={String(u.id)} className="even:bg-gray-50 border-b border-gray-100">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {u.avatarUrl ? (
-                          <img src={u.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                        {u.avatar_url || u.avatarUrl ? (
+                          <img src={u.avatar_url || u.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
                         ) : (
                           <div className="w-7 h-7 bg-primary-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold">
-                            {(u.displayName ?? u.username ?? '?')[0]?.toUpperCase()}
+                            {(u.display_name ?? u.displayName ?? u.username ?? '?')[0]?.toUpperCase()}
                           </div>
                         )}
-                        <span className="font-medium text-gray-900">{u.username}</span>
+                        <div>
+                          <div className="font-medium text-gray-900">{u.display_name ?? u.displayName}</div>
+                          <div className="text-xs text-gray-400">@{u.username}</div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{u.displayName}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{u.email}</td>
-                    <td className="px-4 py-3 text-right">{u.postCount ?? '-'}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{u.department || u.job_title || '-'}</td>
                     <td className="px-4 py-3 text-center">
-                      {u.admin && (
+                      {u.status === 'PENDING_SETUP' ? (
+                        <span className="inline-block bg-amber-100 text-amber-700 text-xs font-medium px-2 py-0.5 rounded">
+                          Pending Setup
+                        </span>
+                      ) : (
+                        <span className="inline-block bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded">
+                          Active
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {(u.is_admin || u.admin) && (
                         <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-0.5 rounded">
                           Admin
                         </span>
@@ -784,12 +825,9 @@ function UsersTab() {
                           onClick={() => toggleAdmin.mutate(String(u.id))}
                           className="text-xs text-primary-600 hover:underline"
                         >
-                          {u.admin ? 'Remove Admin' : 'Make Admin'}
+                          {(u.is_admin || u.admin) ? 'Remove Admin' : 'Make Admin'}
                         </button>
-                        <Link
-                          to={`/profile/${String(u.id)}`}
-                          className="text-xs text-gray-500 hover:underline"
-                        >
+                        <Link to={`/profile/${String(u.id)}`} className="text-xs text-gray-500 hover:underline">
                           View
                         </Link>
                       </div>
@@ -797,37 +835,402 @@ function UsersTab() {
                   </tr>
                 ))}
                 {users.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                      No users found
-                    </td>
-                  </tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No users found</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-500">
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page + 1 >= totalPages}
-              className="btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
-            >
-              Next
-            </button>
+            <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="btn-primary text-sm px-3 py-1.5 disabled:opacity-50">Previous</button>
+            <span className="text-sm text-gray-500">Page {page + 1}</span>
+            <button onClick={() => setPage((p) => p + 1)} disabled={users.length < 20} className="btn-primary text-sm px-3 py-1.5 disabled:opacity-50">Next</button>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function InviteUserSection() {
+  const queryClient = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [department, setDepartment] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedGroups, setSelectedGroups] = useState<number[]>([]);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const { data: groups } = useQuery({
+    queryKey: ['admin-groups-list'],
+    queryFn: () => api.get('/admin/groups', { params: { size: 100 } }).then((r) => r.data),
+  });
+  const groupList = Array.isArray(groups) ? groups : [];
+
+  const inviteMutation = useMutation({
+    mutationFn: (payload: any) => api.post('/admin/users/invite', payload),
+    onSuccess: ({ data }) => {
+      setResult(data);
+      setError('');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-invites'] });
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.message ?? 'Failed to create invite');
+      setResult(null);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    inviteMutation.mutate({
+      email,
+      displayName: displayName || email.split('@')[0],
+      department: department || null,
+      jobTitle: jobTitle || null,
+      groupIds: selectedGroups,
+      admin: isAdmin,
+    });
+  };
+
+  const copyLink = () => {
+    if (result?.inviteUrl) {
+      const url = result.inviteUrl.startsWith('http') ? result.inviteUrl : window.location.origin + result.inviteUrl;
+      navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const reset = () => {
+    setEmail(''); setDisplayName(''); setDepartment(''); setJobTitle('');
+    setIsAdmin(false); setSelectedGroups([]); setResult(null); setError('');
+  };
+
+  if (result) {
+    const fullUrl = result.inviteUrl?.startsWith('http') ? result.inviteUrl : window.location.origin + (result.inviteUrl || '');
+    return (
+      <div className="max-w-lg">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-green-800 mb-2">Invite Created</h3>
+          <p className="text-sm text-green-700 mb-4">
+            An account has been created for <strong>{result.displayName}</strong> ({result.email}).
+            Share the setup link below so they can complete their account.
+          </p>
+          <div className="flex gap-2">
+            <input type="text" readOnly value={fullUrl} className="input-field flex-1 text-xs bg-white" />
+            <button onClick={copyLink} className="btn-primary text-sm px-3 whitespace-nowrap">
+              {copied ? 'Copied!' : 'Copy Link'}
+            </button>
+          </div>
+          <div className="mt-3 p-3 bg-white rounded border border-green-100 text-xs text-gray-500">
+            <strong>Email integration:</strong> To automatically email invite links, configure SMTP settings
+            (SMTP_HOST, SMTP_USER, SMTP_PASS environment variables). Until then, share links manually.
+          </div>
+          <button onClick={reset} className="mt-4 text-sm text-green-700 hover:underline">
+            Invite another user
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-lg">
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Invite a New User</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-field w-full" placeholder="user@company.com" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="input-field w-full" placeholder="Jane Doe" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+              <input type="text" value={department} onChange={(e) => setDepartment(e.target.value)} className="input-field w-full" placeholder="Engineering" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+              <input type="text" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="input-field w-full" placeholder="Software Engineer" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Add to Groups</label>
+            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+              {groupList.length === 0 && <div className="text-xs text-gray-400 p-1">No groups available</div>}
+              {groupList.map((g: any) => (
+                <label key={g.id} className="flex items-center gap-2 text-sm text-gray-700 hover:bg-gray-50 px-1 rounded cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedGroups.includes(g.id)}
+                    onChange={(e) => {
+                      setSelectedGroups((prev) =>
+                        e.target.checked ? [...prev, g.id] : prev.filter((id) => id !== g.id)
+                      );
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  {g.name} <span className="text-xs text-gray-400">({g.member_count ?? 0} members)</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} className="rounded border-gray-300" />
+            Grant admin privileges
+          </label>
+          {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
+          <button type="submit" disabled={inviteMutation.isPending} className="btn-primary w-full">
+            {inviteMutation.isPending ? 'Creating...' : 'Create Invite'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BatchImportSection() {
+  const queryClient = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string[][]>([]);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setResult(null);
+    setError('');
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split('\n').filter((l) => l.trim());
+      setPreview(lines.slice(0, 6).map((l) => l.split(',')));
+    };
+    reader.readAsText(f);
+  };
+
+  const uploadMutation = useMutation({
+    mutationFn: (formData: FormData) => api.post('/admin/users/invite/batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+    onSuccess: ({ data }) => {
+      setResult(data);
+      setError('');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-invites'] });
+    },
+    onError: (err: any) => setError(err.response?.data?.message ?? 'Upload failed'),
+  });
+
+  const handleUpload = () => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    uploadMutation.mutate(formData);
+  };
+
+  const copyLink = (url: string, idx: number) => {
+    const full = url.startsWith('http') ? url : window.location.origin + url;
+    navigator.clipboard.writeText(full);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Batch Import Users</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Upload a CSV file to invite multiple users at once. Each user will get a unique setup link.
+        </p>
+
+        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+          <div className="text-sm font-medium text-gray-700 mb-2">CSV Format</div>
+          <code className="text-xs text-gray-600 block">
+            email,displayName,department,jobTitle,groups,admin<br />
+            jane@company.com,Jane Doe,Engineering,Software Engineer,Coffee Lovers;Book Club,false<br />
+            bob@company.com,Bob Smith,Marketing,Content Lead,,false
+          </code>
+          <div className="text-xs text-gray-400 mt-2">
+            Only <strong>email</strong> is required. Groups use semicolons to separate multiple names.
+          </div>
+        </div>
+
+        <input type="file" accept=".csv,text/csv" onChange={handleFileChange}
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
+
+        {preview.length > 0 && (
+          <div className="mt-4">
+            <div className="text-sm font-medium text-gray-700 mb-2">Preview (first 5 rows)</div>
+            <div className="overflow-x-auto">
+              <table className="text-xs w-full border border-gray-200">
+                {preview.map((row, i) => (
+                  <tr key={i} className={i === 0 ? 'bg-gray-100 font-medium' : 'even:bg-gray-50'}>
+                    {row.map((cell, j) => (
+                      <td key={j} className="px-2 py-1 border-r border-gray-200">{cell.trim()}</td>
+                    ))}
+                  </tr>
+                ))}
+              </table>
+            </div>
+            <button onClick={handleUpload} disabled={uploadMutation.isPending} className="btn-primary mt-3">
+              {uploadMutation.isPending ? 'Importing...' : `Import ${preview.length - 1} Users`}
+            </button>
+          </div>
+        )}
+
+        {error && <div className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
+      </div>
+
+      {result && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Import Results</h3>
+          <div className="flex gap-4 mb-4">
+            <div className="text-sm"><span className="font-medium text-green-600">{result.created}</span> created</div>
+            {result.failed > 0 && <div className="text-sm"><span className="font-medium text-red-600">{result.failed}</span> failed</div>}
+            <div className="text-sm text-gray-500">{result.total} total</div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b bg-gray-50">
+                  <th className="px-3 py-2">Row</th>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Setup Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.results?.map((r: any, i: number) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="px-3 py-2 text-gray-500">{r.row}</td>
+                    <td className="px-3 py-2">{r.email}</td>
+                    <td className="px-3 py-2">
+                      {r.status === 'created' ? (
+                        <span className="text-green-600 font-medium">Created</span>
+                      ) : (
+                        <span className="text-red-600" title={r.error}>Failed: {r.error}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {r.inviteUrl && (
+                        <button onClick={() => copyLink(r.inviteUrl, i)} className="text-xs text-primary-600 hover:underline">
+                          {copiedIdx === i ? 'Copied!' : 'Copy Link'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PendingInvitesSection() {
+  const queryClient = useQueryClient();
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const { data: invites, isLoading } = useQuery({
+    queryKey: ['admin-invites'],
+    queryFn: () => api.get('/admin/invites').then((r) => r.data),
+  });
+
+  const regenerate = useMutation({
+    mutationFn: (userId: number) => api.post(`/admin/invites/${userId}/regenerate`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-invites'] }),
+  });
+
+  const revoke = useMutation({
+    mutationFn: (tokenId: number) => api.delete(`/admin/invites/${tokenId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-invites'] }),
+  });
+
+  const copyLink = (url: string) => {
+    const full = url.startsWith('http') ? url : window.location.origin + url;
+    navigator.clipboard.writeText(full);
+    setCopiedToken(url);
+    setTimeout(() => setCopiedToken(null), 2000);
+  };
+
+  const list = Array.isArray(invites) ? invites : [];
+
+  if (isLoading) return <div className="text-gray-400 py-10 text-center">Loading invites...</div>;
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-gray-500 border-b bg-gray-50">
+            <th className="px-4 py-3">User</th>
+            <th className="px-4 py-3">Email</th>
+            <th className="px-4 py-3 text-center">Status</th>
+            <th className="px-4 py-3">Created</th>
+            <th className="px-4 py-3">Expires</th>
+            <th className="px-4 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((inv: any) => (
+            <tr key={String(inv.id)} className="even:bg-gray-50 border-b border-gray-100">
+              <td className="px-4 py-3 font-medium text-gray-900">{inv.displayName ?? inv.username}</td>
+              <td className="px-4 py-3 text-gray-500 text-xs">{inv.email}</td>
+              <td className="px-4 py-3 text-center">
+                {inv.status === 'USED' && (
+                  <span className="inline-block bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded">Completed</span>
+                )}
+                {inv.status === 'EXPIRED' && (
+                  <span className="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded">Expired</span>
+                )}
+                {inv.status === 'PENDING' && (
+                  <span className="inline-block bg-amber-100 text-amber-700 text-xs font-medium px-2 py-0.5 rounded">Pending</span>
+                )}
+              </td>
+              <td className="px-4 py-3 text-xs text-gray-500">
+                {inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '-'}
+              </td>
+              <td className="px-4 py-3 text-xs text-gray-500">
+                {inv.expiresAt ? new Date(inv.expiresAt).toLocaleDateString() : '-'}
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  {inv.status === 'PENDING' && (
+                    <>
+                      <button onClick={() => copyLink(inv.inviteUrl)} className="text-xs text-primary-600 hover:underline">
+                        {copiedToken === inv.inviteUrl ? 'Copied!' : 'Copy Link'}
+                      </button>
+                      <button onClick={() => revoke.mutate(inv.id)} className="text-xs text-red-500 hover:underline">
+                        Revoke
+                      </button>
+                    </>
+                  )}
+                  {inv.status === 'EXPIRED' && (
+                    <button onClick={() => regenerate.mutate(inv.userId)} className="text-xs text-primary-600 hover:underline">
+                      Regenerate
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {list.length === 0 && (
+            <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No invites yet</td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

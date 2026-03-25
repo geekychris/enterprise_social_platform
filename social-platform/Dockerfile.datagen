@@ -1,0 +1,4 @@
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY social-datagen/target/social-datagen-1.0.0-SNAPSHOT.jar datagen.jar
+ENTRYPOINT ["java", "-jar", "datagen.jar"]

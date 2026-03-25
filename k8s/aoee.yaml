@@ -15,7 +15,8 @@ spec:
     spec:
       containers:
         - name: aoee-server
-          image: worksphere/aoee-server:latest
+          image: docker.io/worksphere/aoee-server:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 50051
           env:
@@ -66,16 +67,17 @@ spec:
     spec:
       containers:
         - name: aoee-proxy
-          image: worksphere/aoee-proxy:latest
+          image: docker.io/worksphere/aoee-proxy:latest
+          imagePullPolicy: Never
           ports:
-            - containerPort: 8082
+            - containerPort: 8081
           env:
             - name: AOEE_HOST
               value: "aoee-server"
             - name: AOEE_PORT
               value: "50051"
             - name: SERVER_PORT
-              value: "8082"
+              value: "8081"
           resources:
             requests:
               memory: "256Mi"
@@ -86,7 +88,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /api/stats
-              port: 8082
+              port: 8081
             initialDelaySeconds: 15
             periodSeconds: 10
 ---
@@ -100,4 +102,4 @@ spec:
     app: aoee-proxy
   ports:
     - port: 8082
-      targetPort: 8082
+      targetPort: 8081
