@@ -32,7 +32,8 @@ public class GlobalIdConfig {
             ProjectRepository projectRepository,
             AttachmentRepository attachmentRepository,
             ReactionRepository reactionRepository,
-            MessageRepository messageRepository) {
+            MessageRepository messageRepository,
+            ConversationRepository conversationRepository) {
 
         return args -> {
             initCounter(generator, ObjectType.USER, userRepository.findMaxId());
@@ -45,6 +46,7 @@ public class GlobalIdConfig {
             initCounter(generator, ObjectType.ATTACHMENT, attachmentRepository.findMaxId());
             initCounter(generator, ObjectType.REACTION, reactionRepository.findMaxId());
             initCounter(generator, ObjectType.MESSAGE, messageRepository.findMaxId());
+            initCounter(generator, ObjectType.CONVERSATION, conversationRepository.findMaxId());
             log.info("GlobalId counters initialized from database max values");
         };
     }

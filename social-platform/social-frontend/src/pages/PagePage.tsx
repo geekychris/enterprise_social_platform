@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import PostCard from '../components/feed/PostCard';
 import CreatePostForm from '../components/feed/CreatePostForm';
 import RichContent from '../components/feed/RichContent';
+import AiAssistant from '../components/ai/AiAssistant';
 
 export default function PagePage() {
   const { id } = useParams<{ id: string }>();
@@ -374,6 +375,9 @@ export default function PagePage() {
           </div>
         </div>
       )}
+
+      {/* AI Assistant */}
+      <AiAssistant context="page" contextId={pageId} />
 
       {/* Create post (if owner) */}
       {isOwner && <CreatePostForm defaultTargetType="PAGE_FEED" defaultTargetId={pageId} />}

@@ -13,7 +13,7 @@ interface Props {
   maxDepth?: number;
 }
 
-export default function CommentThread({ comment, maxDepth = 2 }: Props) {
+export default function CommentThread({ comment, maxDepth = 1 }: Props) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);

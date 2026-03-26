@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useFeed } from '../../hooks/useFeed';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
 import PostCard from './PostCard';
+import AiAssistant from '../ai/AiAssistant';
 
 function PostSkeleton() {
   return (
@@ -56,6 +57,7 @@ export default function FeedView() {
 
   return (
     <div className="space-y-4">
+      <AiAssistant context="feed" />
       {posts.map((post) => (
         <PostCard key={post.id} post={post} />
       ))}

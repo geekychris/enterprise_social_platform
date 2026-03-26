@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import PostCard from '../components/feed/PostCard';
 import CreatePostForm from '../components/feed/CreatePostForm';
 import RichContent from '../components/feed/RichContent';
+import AiAssistant from '../components/ai/AiAssistant';
 
 export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
@@ -463,6 +464,9 @@ export default function GroupPage() {
           </div>
         </div>
       )}
+
+      {/* AI Assistant */}
+      <AiAssistant context="group" contextId={groupId} />
 
       {/* Create post (if member) */}
       {isMember && <CreatePostForm defaultTargetType="GROUP_FEED" defaultTargetId={groupId} />}

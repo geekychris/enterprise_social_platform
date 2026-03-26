@@ -147,7 +147,14 @@ export default function UserProfile({ userId }: Props) {
           ) : (
             <div className="pb-1 flex items-center gap-2">
               <button
-                onClick={() => navigate(`/messages/${userId}`)}
+                onClick={async () => {
+                  try {
+                    const { data } = await api.post(`/conversations/direct/${userId}`);
+                    navigate(`/messages/${data.id}`);
+                  } catch {
+                    navigate('/messages');
+                  }
+                }}
                 className="text-sm border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center gap-1.5"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

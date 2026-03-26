@@ -6,7 +6,6 @@ import com.social.app.persistence.repository.AttachmentRepository;
 import com.social.app.persistence.repository.MessageRepository;
 import com.social.app.persistence.repository.UserRepository;
 import com.social.core.dto.AttachmentDto;
-import com.social.core.dto.ConversationDto;
 import com.social.core.dto.MessageDto;
 import com.social.core.dto.UserSummaryDto;
 import com.social.core.id.GlobalIdGenerator;
@@ -16,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,11 +45,11 @@ public class MessageService {
     }
 
     @Transactional
-    public MessageEntity send(long senderId, long recipientId, String content, List<Long> attachmentIds) {
+    public MessageEntity send(long senderId, long conversationId, String content, List<Long> attachmentIds) {
         var entity = new MessageEntity();
         entity.setId(idGenerator.next(ObjectType.MESSAGE).value());
+        entity.setConversationId(conversationId);
         entity.setSenderId(senderId);
-        entity.setRecipientId(recipientId);
         entity.setContent(content);
         entity.setRead(false);
 
@@ -70,44 +69,24 @@ public class MessageService {
         }
     }
 
-    public List<ConversationDto> getConversations(long userId) {
-        List<MessageEntity> latestMessages = messageRepository.findLatestPerConversation(userId);
-        List<ConversationDto> conversations = new ArrayList<>();
-
-        for (MessageEntity message : latestMessages) {
-            long partnerId = message.getSenderId().equals(userId) ? message.getRecipientId() : message.getSenderId();
-            UserSummaryDto partner = getUserSummary(partnerId);
-
-            // Count unread from this partner
-            long unreadCount = messageRepository.findConversation(userId, partnerId, PageRequest.of(0, 1000))
-                    .stream()
-                    .filter(m -> m.getRecipientId().equals(userId) && !m.isRead())
-                    .count();
-
-            conversations.add(new ConversationDto(partner, toDto(message), unreadCount));
+    public List<MessageDto> getMessages(long conversationId, Instant visibleFrom, int page, int size) {
+        List<MessageEntity> messages;
+        if (visibleFrom != null) {
+            messages = messageRepository.findByConversationIdAndCreatedAtAfterOrderByCreatedAtDesc(
+                    conversationId, visibleFrom, PageRequest.of(page, size));
+        } else {
+            messages = messageRepository.findByConversationIdOrderByCreatedAtDesc(
+                    conversationId, PageRequest.of(page, size));
         }
-
-        return conversations;
-    }
-
-    public List<MessageDto> getConversation(long userId, long partnerId, int page, int size) {
-        return messageRepository.findConversation(userId, partnerId, PageRequest.of(page, size)).stream()
-                .map(this::toDto)
-                .toList();
-    }
-
-    @Transactional
-    public void markRead(long userId, long senderId) {
-        messageRepository.markConversationRead(senderId, userId);
+        return messages.stream().map(this::toDto).toList();
     }
 
     public long getUnreadCount(long userId) {
-        return messageRepository.countByRecipientIdAndReadFalse(userId);
+        return messageRepository.countUnreadForUser(userId);
     }
 
     public MessageDto toDto(MessageEntity entity) {
         UserSummaryDto sender = getUserSummary(entity.getSenderId());
-        UserSummaryDto recipient = getUserSummary(entity.getRecipientId());
 
         List<Long> attachmentIds = jdbc.queryForList(
                 "SELECT attachment_id FROM message_attachments WHERE message_id = ?",
@@ -119,8 +98,8 @@ public class MessageService {
 
         return new MessageDto(
                 entity.getId(),
+                entity.getConversationId(),
                 sender,
-                recipient,
                 entity.getContent(),
                 attachments,
                 entity.isRead(),

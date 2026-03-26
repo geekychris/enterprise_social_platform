@@ -1,7 +1,14 @@
 package com.social.core.dto;
 
+import java.time.Instant;
+import java.util.List;
+
 public record ConversationDto(
-        UserSummaryDto partner,
+        long id,
+        String name,
+        String type,
+        List<UserSummaryDto> participants,
         MessageDto lastMessage,
-        long unreadCount
+        long unreadCount,
+        Instant createdAt
 ) {}

@@ -38,7 +38,7 @@ export default function App() {
                 <Route path="/group/:id" element={<GroupPage />} />
                 <Route path="/page/:id" element={<PagePage />} />
                 <Route path="/messages" element={<MessagesPage />} />
-                <Route path="/messages/:partnerId" element={<MessagesPage />} />
+                <Route path="/messages/:conversationId" element={<MessagesPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/admin/*" element={<AdminPage />} />

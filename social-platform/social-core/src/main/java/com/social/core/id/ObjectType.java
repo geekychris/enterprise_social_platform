@@ -15,7 +15,8 @@ public enum ObjectType {
     ATTACHMENT((byte) 0x08),
     REACTION((byte) 0x09),
     MESSAGE((byte) 0x0A),
-    INVITE_TOKEN((byte) 0x0B);
+    INVITE_TOKEN((byte) 0x0B),
+    CONVERSATION((byte) 0x0C);
 
     private final byte code;
 

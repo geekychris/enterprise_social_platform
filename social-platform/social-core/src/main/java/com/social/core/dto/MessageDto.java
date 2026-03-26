@@ -5,8 +5,8 @@ import java.util.List;
 
 public record MessageDto(
         long id,
+        long conversationId,
         UserSummaryDto sender,
-        UserSummaryDto recipient,
         String content,
         List<AttachmentDto> attachments,
         boolean read,

@@ -144,8 +144,8 @@ export interface MembershipDto {
 
 export interface MessageDto {
   id: number;
+  conversationId: number;
   sender: AuthorDto;
-  recipient: AuthorDto;
   content: string;
   attachments: AttachmentDto[];
   read: boolean;
@@ -153,9 +153,13 @@ export interface MessageDto {
 }
 
 export interface ConversationDto {
-  partner: AuthorDto;
-  lastMessage: MessageDto;
+  id: number;
+  name: string | null;
+  type: 'DIRECT' | 'GROUP';
+  participants: AuthorDto[];
+  lastMessage: MessageDto | null;
   unreadCount: number;
+  createdAt: string;
 }
 
 export type ReactionType = 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY';
