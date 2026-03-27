@@ -111,6 +111,7 @@ export default function GroupPage() {
       api.post(`/groups/${groupId}/members/${memberId}/approve`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['group-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['group-pending', groupId] });
       queryClient.invalidateQueries({ queryKey: ['group', groupId] });
     },
   });
@@ -120,6 +121,7 @@ export default function GroupPage() {
       api.post(`/groups/${groupId}/members/${memberId}/reject`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['group-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['group-pending', groupId] });
     },
   });
 

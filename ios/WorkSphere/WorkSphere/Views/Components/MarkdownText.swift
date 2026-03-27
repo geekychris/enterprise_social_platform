@@ -1,5 +1,6 @@
 import SwiftUI
 
+
 /// Renders markdown with block-level support (lists, headings, paragraphs).
 struct MarkdownText: View {
     let content: String

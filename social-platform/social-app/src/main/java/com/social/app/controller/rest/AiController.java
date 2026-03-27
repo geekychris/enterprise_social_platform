@@ -4,12 +4,14 @@ import com.social.app.persistence.entity.MessageEntity;
 import com.social.app.persistence.repository.MessageRepository;
 import com.social.app.persistence.repository.PostRepository;
 import com.social.app.persistence.repository.UserRepository;
+import com.social.app.service.BotService;
 import com.social.app.service.ConversationService;
 import com.social.app.service.FeedService;
 import com.social.app.service.OllamaService;
 import com.social.core.dto.PostDto;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -23,6 +25,7 @@ import java.util.stream.Collectors;
 public class AiController {
 
     private final OllamaService ollamaService;
+    private final BotService botService;
     private final MessageRepository messageRepository;
     private final PostRepository postRepository;
     private final UserRepository userRepository;
@@ -31,6 +34,7 @@ public class AiController {
     private final com.social.app.service.PostService postService;
 
     public AiController(OllamaService ollamaService,
+                        BotService botService,
                         MessageRepository messageRepository,
                         PostRepository postRepository,
                         UserRepository userRepository,
@@ -38,6 +42,7 @@ public class AiController {
                         FeedService feedService,
                         com.social.app.service.PostService postService) {
         this.ollamaService = ollamaService;
+        this.botService = botService;
         this.messageRepository = messageRepository;
         this.postRepository = postRepository;
         this.userRepository = userRepository;
@@ -153,6 +158,21 @@ public class AiController {
                     "Help the user catch up on what's happening, identify important posts, or summarize recent activity.";
             default -> base;
         };
+    }
+
+    /**
+     * Returns the bot user info so clients can start conversations with it.
+     */
+    @GetMapping("/bot/info")
+    public ResponseEntity<Map<String, Object>> getBotInfo() {
+        long botId = botService.getBotUserId();
+        var user = userRepository.findById(botId);
+        return ResponseEntity.ok(Map.of(
+                "id", botId,
+                "username", user.map(u -> u.getUsername()).orElse("roid"),
+                "displayName", user.map(u -> u.getDisplayName()).orElse("Roid"),
+                "avatarUrl", user.map(u -> u.getAvatarUrl()).orElse("")
+        ));
     }
 
     private static long parseLong(Object value) {

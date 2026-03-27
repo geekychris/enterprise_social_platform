@@ -46,3 +46,8 @@ social:
   ai:
     ollama-url: ${SOCIAL_AI_OLLAMA_URL:http://localhost:11434}
     model: ${SOCIAL_AI_MODEL:llama3.2:latest}
+  bot:
+    user-id: ${SOCIAL_BOT_USER_ID:72057594037999999}
+    name: ${SOCIAL_BOT_NAME:roid}
+    max-context-tokens: ${SOCIAL_BOT_MAX_CONTEXT:3000}
+    max-history-messages: ${SOCIAL_BOT_MAX_HISTORY:30}

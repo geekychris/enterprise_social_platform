@@ -40,6 +40,9 @@ public class UserEntity {
     @Column(name = "is_admin", nullable = false)
     private boolean admin;
 
+    @Column(name = "is_bot", nullable = false)
+    private boolean bot;
+
     @Column(name = "cover_url", length = 512)
     private String coverUrl;
 
@@ -123,6 +126,9 @@ public class UserEntity {
 
     public boolean isAdmin() { return admin; }
     public void setAdmin(boolean admin) { this.admin = admin; }
+
+    public boolean isBot() { return bot; }
+    public void setBot(boolean bot) { this.bot = bot; }
 
     public String getCoverUrl() { return coverUrl; }
     public void setCoverUrl(String coverUrl) { this.coverUrl = coverUrl; }

@@ -1,6 +1,7 @@
 package com.social.app.controller.rest;
 
 import com.social.app.persistence.entity.ConversationEntity;
+import com.social.app.service.BotService;
 import com.social.app.service.ConversationService;
 import com.social.app.service.MessageService;
 import com.social.core.dto.ConversationDto;
@@ -19,10 +20,12 @@ public class ConversationController {
 
     private final ConversationService conversationService;
     private final MessageService messageService;
+    private final BotService botService;
 
-    public ConversationController(ConversationService conversationService, MessageService messageService) {
+    public ConversationController(ConversationService conversationService, MessageService messageService, BotService botService) {
         this.conversationService = conversationService;
         this.messageService = messageService;
+        this.botService = botService;
     }
 
     @PostMapping
@@ -111,6 +114,10 @@ public class ConversationController {
         }
 
         var entity = messageService.send(userId, id, content, attachmentIds);
+
+        // Trigger bot if applicable
+        botService.handleMessage(id, userId, content);
+
         return ResponseEntity.ok(messageService.toDto(entity));
     }
 

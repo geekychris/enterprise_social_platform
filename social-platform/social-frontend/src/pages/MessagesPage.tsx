@@ -6,6 +6,8 @@ import type { ConversationDto, MessageDto, AuthorDto } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
 import { formatRelativeTime } from '../utils';
 import AiAssistant from '../components/ai/AiAssistant';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function MessagesPage() {
   const { conversationId: convIdParam } = useParams<{ conversationId: string }>();
@@ -427,7 +429,9 @@ function MessageThread({
                           : 'bg-gray-100 text-gray-800 rounded-bl-md'
                       }`}
                     >
-                      {msg.content}
+                      <div className="prose prose-sm max-w-none prose-p:my-0.5 prose-ul:my-0.5 prose-li:my-0 prose-headings:my-1 [&_*]:text-inherit">
+                        <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
+                      </div>
                     </div>
                     {msg.attachments?.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">

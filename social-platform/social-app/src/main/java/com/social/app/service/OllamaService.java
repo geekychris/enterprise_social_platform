@@ -90,4 +90,53 @@ public class OllamaService {
             } catch (Exception ignored) {}
         }
     }
+
+    /**
+     * Blocking chat completion — gathers the full response into the StringBuilder.
+     */
+    public void chatBlocking(String systemPrompt, String userMessage, StringBuilder result) throws Exception {
+        var url = URI.create(ollamaUrl + "/api/chat").toURL();
+        var conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(120000);
+
+        String body = objectMapper.writeValueAsString(new java.util.LinkedHashMap<>() {{
+            put("model", model);
+            put("messages", new Object[]{
+                    new java.util.LinkedHashMap<>() {{
+                        put("role", "system");
+                        put("content", systemPrompt);
+                    }},
+                    new java.util.LinkedHashMap<>() {{
+                        put("role", "user");
+                        put("content", userMessage);
+                    }}
+            });
+            put("stream", true);
+        }});
+
+        conn.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
+        conn.getOutputStream().flush();
+
+        if (conn.getResponseCode() != 200) {
+            throw new RuntimeException("Ollama returned status " + conn.getResponseCode());
+        }
+
+        try (var reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) continue;
+                JsonNode node = objectMapper.readTree(line);
+                if (node.has("message") && node.get("message").has("content")) {
+                    result.append(node.get("message").get("content").asText());
+                }
+                if (node.has("done") && node.get("done").asBoolean()) {
+                    break;
+                }
+            }
+        }
+    }
 }

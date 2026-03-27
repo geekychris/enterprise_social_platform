@@ -168,6 +168,9 @@ export default function CreatePostForm({ defaultTargetType, defaultTargetId }: C
         queryClient.invalidateQueries({ queryKey: ['page-posts', defaultTargetId] });
       }
     },
+    onError: (err) => {
+      console.error('Failed to create post:', err);
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {

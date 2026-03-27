@@ -349,6 +349,11 @@ export default function Sidebar() {
         )}
       </div>
 
+      {/* Bot */}
+      <div className="px-4 mt-5">
+        <BotChatButton />
+      </div>
+
       {/* Friends */}
       <div className="px-4 mt-5 pb-4">
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
@@ -399,6 +404,41 @@ export default function Sidebar() {
         )}
       </div>
     </aside>
+  );
+}
+
+function BotChatButton() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  const startBotChat = async () => {
+    setLoading(true);
+    try {
+      const { data: botInfo } = await api.get('/ai/bot/info');
+      const { data: conv } = await api.post(`/conversations/direct/${botInfo.id}`);
+      navigate(`/messages/${conv.id}`);
+    } catch {
+      // fallback
+    }
+    setLoading(false);
+  };
+
+  return (
+    <button
+      onClick={startBotChat}
+      disabled={loading}
+      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors text-left"
+    >
+      <div className="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm font-semibold text-purple-700">Chat with Roid</span>
+        <p className="text-[10px] text-purple-500">AI Assistant</p>
+      </div>
+    </button>
   );
 }
 
