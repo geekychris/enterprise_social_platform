@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import PostCard from '../components/feed/PostCard';
 import CreatePostForm from '../components/feed/CreatePostForm';
 import RichContent from '../components/feed/RichContent';
+import MarkdownContent from '../components/feed/MarkdownContent';
 import AiAssistant from '../components/ai/AiAssistant';
 
 export default function PagePage() {
@@ -194,7 +195,7 @@ export default function PagePage() {
                   {page.name}
                 </h1>
                 {page.description && (
-                  <RichContent
+                  <MarkdownContent
                     content={page.description}
                     className="text-sm text-gray-500 mt-0.5"
                   />

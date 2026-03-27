@@ -109,8 +109,8 @@ export default function UserProfile({ userId }: Props) {
           <div className="h-40 bg-gradient-to-r from-primary-500 to-primary-600" />
         )}
 
-        {/* Profile header */}
-        <div className="p-4 flex items-end gap-4 -mt-12">
+        {/* Avatar - overlaps cover */}
+        <div className="px-4 -mt-12">
           {user.avatarUrl ? (
             <img
               src={user.avatarUrl}
@@ -122,7 +122,11 @@ export default function UserProfile({ userId }: Props) {
               {user.displayName?.[0]?.toUpperCase() ?? '?'}
             </div>
           )}
-          <div className="flex-1 pb-1">
+        </div>
+
+        {/* Profile info - below cover */}
+        <div className="px-4 pt-2 flex items-start gap-4">
+          <div className="flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{user.displayName}</h1>
               {user.pronouns && (

@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import PostCard from '../components/feed/PostCard';
 import CreatePostForm from '../components/feed/CreatePostForm';
 import RichContent from '../components/feed/RichContent';
+import MarkdownContent from '../components/feed/MarkdownContent';
 import AiAssistant from '../components/ai/AiAssistant';
 
 export default function GroupPage() {
@@ -236,7 +237,7 @@ export default function GroupPage() {
                   {group.name}
                 </h1>
                 {group.description && (
-                  <RichContent
+                  <MarkdownContent
                     content={group.description}
                     className="text-sm text-gray-500 mt-0.5"
                   />
