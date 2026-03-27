@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import type { GroupDto, MembershipDto, PostDto } from '../api/types';
@@ -244,13 +244,34 @@ export default function GroupPage() {
                     className="text-sm text-gray-500 mt-0.5"
                   />
                 )}
-                <p className="text-xs text-gray-400 mt-1">
-                  {group.memberCount} member
-                  {group.memberCount !== 1 ? 's' : ''} &middot;{' '}
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                    {group.visibility}
+                <div className="flex items-center gap-2 mt-1.5">
+                  {members && members.length > 0 && (
+                    <div className="flex items-center">
+                      <div className="flex -space-x-2">
+                        {members.slice(0, 8).map((m) => (
+                          <Link key={m.userId} to={`/profile/${m.userId}`} title={m.userName || ''} className="hover:opacity-80 transition-opacity">
+                            {m.userAvatarUrl ? (
+                              <img src={m.userAvatarUrl} alt="" className="w-7 h-7 rounded-full border-2 border-white object-cover" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full border-2 border-white bg-primary-500 text-white flex items-center justify-center text-[10px] font-semibold">
+                                {(m.userName || '?')[0]?.toUpperCase()}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                      {members.length > 8 && (
+                        <span className="text-[10px] text-gray-400 ml-1.5">+{members.length - 8}</span>
+                      )}
+                    </div>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {group.memberCount} member{group.memberCount !== 1 ? 's' : ''} &middot;{' '}
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                      {group.visibility}
+                    </span>
                   </span>
-                </p>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

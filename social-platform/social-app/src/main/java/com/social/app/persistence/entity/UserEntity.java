@@ -130,6 +130,12 @@ public class UserEntity {
     public boolean isBot() { return bot; }
     public void setBot(boolean bot) { this.bot = bot; }
 
+    @Column(name = "digest_enabled", nullable = false)
+    private boolean digestEnabled = true;
+
+    public boolean isDigestEnabled() { return digestEnabled; }
+    public void setDigestEnabled(boolean digestEnabled) { this.digestEnabled = digestEnabled; }
+
     public String getCoverUrl() { return coverUrl; }
     public void setCoverUrl(String coverUrl) { this.coverUrl = coverUrl; }
 

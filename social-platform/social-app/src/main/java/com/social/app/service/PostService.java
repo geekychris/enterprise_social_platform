@@ -3,10 +3,12 @@ package com.social.app.service;
 import com.social.app.persistence.entity.PostEntity;
 import com.social.app.persistence.repository.AttachmentRepository;
 import com.social.app.persistence.repository.CommentRepository;
+import com.social.app.persistence.repository.PollRepository;
 import com.social.app.persistence.repository.PostRepository;
 import com.social.app.persistence.repository.ReactionRepository;
 import com.social.core.dto.AttachmentDto;
 import com.social.core.dto.CreatePostRequest;
+import com.social.core.dto.PollDto;
 import com.social.core.dto.PostDto;
 import com.social.core.dto.UserSummaryDto;
 import com.social.core.id.GlobalIdGenerator;
@@ -32,6 +34,8 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final AttachmentRepository attachmentRepository;
     private final AttachmentService attachmentService;
+    private final PollRepository pollRepository;
+    private final PollService pollService;
     private final GlobalIdGenerator idGenerator;
     private final ApplicationEventPublisher eventPublisher;
     private final UserService userService;
@@ -42,11 +46,15 @@ public class PostService {
                        CommentRepository commentRepository,
                        AttachmentRepository attachmentRepository,
                        AttachmentService attachmentService,
+                       PollRepository pollRepository,
+                       PollService pollService,
                        GlobalIdGenerator idGenerator,
                        ApplicationEventPublisher eventPublisher,
                        UserService userService,
                        JdbcTemplate jdbc) {
         this.postRepository = postRepository;
+        this.pollRepository = pollRepository;
+        this.pollService = pollService;
         this.reactionRepository = reactionRepository;
         this.commentRepository = commentRepository;
         this.attachmentRepository = attachmentRepository;
@@ -123,6 +131,11 @@ public class PostService {
                         .map(attachmentService::toDto)
                         .toList();
 
+        // Check for attached poll
+        PollDto pollDto = pollRepository.findByPostId(entity.getId())
+                .map(poll -> pollService.toDto(poll.getId(), currentUserId))
+                .orElse(null);
+
         return new PostDto(
                 entity.getId(),
                 author,
@@ -134,7 +147,10 @@ public class PostService {
                 reactionCounts,
                 currentUserReaction,
                 commentCount,
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                false,
+                null,
+                pollDto
         );
     }
 

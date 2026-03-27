@@ -1,6 +1,7 @@
 package com.social.app.controller.rest;
 
 import com.social.app.persistence.entity.MessageEntity;
+import com.social.app.persistence.repository.CommentRepository;
 import com.social.app.persistence.repository.MessageRepository;
 import com.social.app.persistence.repository.PostRepository;
 import com.social.app.persistence.repository.UserRepository;
@@ -28,6 +29,7 @@ public class AiController {
     private final BotService botService;
     private final MessageRepository messageRepository;
     private final PostRepository postRepository;
+    private final CommentRepository commentRepository;
     private final UserRepository userRepository;
     private final ConversationService conversationService;
     private final FeedService feedService;
@@ -37,6 +39,7 @@ public class AiController {
                         BotService botService,
                         MessageRepository messageRepository,
                         PostRepository postRepository,
+                        CommentRepository commentRepository,
                         UserRepository userRepository,
                         ConversationService conversationService,
                         FeedService feedService,
@@ -44,6 +47,7 @@ public class AiController {
         this.ollamaService = ollamaService;
         this.botService = botService;
         this.messageRepository = messageRepository;
+        this.commentRepository = commentRepository;
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.conversationService = conversationService;
@@ -158,6 +162,63 @@ public class AiController {
                     "Help the user catch up on what's happening, identify important posts, or summarize recent activity.";
             default -> base;
         };
+    }
+
+    @PostMapping(value = "/summarize/conversation", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter summarizeConversation(@RequestBody Map<String, Object> body, Authentication auth) {
+        long userId = (Long) auth.getPrincipal();
+        Long convId = parseLong(body.get("conversationId"));
+        SseEmitter emitter = new SseEmitter(120_000L);
+        Thread.ofVirtual().start(() -> {
+            try {
+                var participant = conversationService.verifyParticipant(convId, userId);
+                String messages = gatherConversationContext(convId, userId);
+                ollamaService.streamChat(
+                        "You are a helpful assistant. Provide a concise, structured summary of this conversation. " +
+                        "Identify key topics, decisions, action items, and who said what. Use markdown.",
+                        messages + "\n\nPlease summarize this conversation.",
+                        emitter);
+            } catch (Exception e) {
+                try { emitter.send(SseEmitter.event().name("error").data(e.getMessage())); emitter.complete(); } catch (Exception ignored) {}
+            }
+        });
+        return emitter;
+    }
+
+    @PostMapping(value = "/summarize/comments", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter summarizeComments(@RequestBody Map<String, Object> body, Authentication auth) {
+        long userId = (Long) auth.getPrincipal();
+        Long postId = parseLong(body.get("postId"));
+        SseEmitter emitter = new SseEmitter(120_000L);
+        Thread.ofVirtual().start(() -> {
+            try {
+                var post = postRepository.findById(postId).orElseThrow();
+                var comments = postRepository.findById(postId); // we need CommentRepository
+                // Gather post + comments context
+                String context = "Post by " + userRepository.findById(post.getAuthorId()).map(u -> u.getDisplayName()).orElse("Unknown") +
+                        ":\n" + post.getContent() + "\n\n" + gatherCommentsContext(postId, userId);
+                ollamaService.streamChat(
+                        "You are a helpful assistant. Summarize this post and its discussion thread. " +
+                        "Identify key points of agreement, disagreement, and any conclusions. Use markdown.",
+                        context + "\n\nPlease summarize this discussion.",
+                        emitter);
+            } catch (Exception e) {
+                try { emitter.send(SseEmitter.event().name("error").data(e.getMessage())); emitter.complete(); } catch (Exception ignored) {}
+            }
+        });
+        return emitter;
+    }
+
+    private String gatherCommentsContext(long postId, long userId) {
+        var comments = commentRepository.findByPostIdAndDepthOrderByCreatedAtAsc(postId, (short) 0);
+        StringBuilder sb = new StringBuilder("Comments:\n\n");
+        for (var comment : comments) {
+            String author = userRepository.findById(comment.getAuthorId())
+                    .map(u -> u.getDisplayName() != null ? u.getDisplayName() : u.getUsername())
+                    .orElse("Unknown");
+            sb.append(author).append(": ").append(comment.getContent()).append("\n");
+        }
+        return sb.toString();
     }
 
     /**

@@ -6,6 +6,7 @@ import type { ConversationDto, MessageDto, AuthorDto } from '../api/types';
 import { useAuth } from '../hooks/useAuth';
 import { formatRelativeTime } from '../utils';
 import AiAssistant from '../components/ai/AiAssistant';
+import SummarizeButton from '../components/ai/SummarizeButton';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -389,8 +390,9 @@ function MessageThread({
         />
       )}
 
-      {/* AI Assistant */}
-      <div className="px-4 pt-3">
+      {/* AI tools */}
+      <div className="px-4 pt-3 flex items-center gap-2 flex-wrap">
+        <SummarizeButton type="conversation" targetId={conversationId} />
         <AiAssistant context="conversation" contextId={conversationId} />
       </div>
 

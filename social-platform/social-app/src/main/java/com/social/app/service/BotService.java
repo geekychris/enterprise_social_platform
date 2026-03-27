@@ -38,6 +38,8 @@ public class BotService {
 
     private final OllamaService ollamaService;
     private final BotToolService toolService;
+    private final BotActionService actionService;
+    private final BotMemoryService memoryService;
     private final MessageService messageService;
     private final ConversationService conversationService;
     private final ConversationRepository conversationRepository;
@@ -46,12 +48,15 @@ public class BotService {
     private final GlobalIdGenerator idGenerator;
 
     public BotService(OllamaService ollamaService, BotToolService toolService,
+                      BotActionService actionService, BotMemoryService memoryService,
                       MessageService messageService, ConversationService conversationService,
                       ConversationRepository conversationRepository,
                       ConversationParticipantRepository participantRepository,
                       UserRepository userRepository, GlobalIdGenerator idGenerator) {
         this.ollamaService = ollamaService;
         this.toolService = toolService;
+        this.actionService = actionService;
+        this.memoryService = memoryService;
         this.messageService = messageService;
         this.conversationService = conversationService;
         this.conversationRepository = conversationRepository;
@@ -138,9 +143,9 @@ public class BotService {
         String context = gatherContext(conversationId, senderId, userMessage);
         String fullUserMessage = context + "\n\nUser's message: " + userMessage;
 
-        log.info("Bot context gathered ({} chars) for conversation {}:\n{}", context.length(), conversationId, context);
+        log.info("Bot context gathered ({} chars) for conversation {}", context.length(), conversationId);
 
-        // Call Ollama (blocking, not streaming for bot messages)
+        // Call Ollama
         StringBuilder responseBuilder = new StringBuilder();
         try {
             ollamaService.chatBlocking(systemPrompt, fullUserMessage, responseBuilder);
@@ -149,11 +154,211 @@ public class BotService {
             responseBuilder.append("Sorry, I'm having trouble thinking right now. Please try again.");
         }
 
-        // Save bot's response as a message
         String response = responseBuilder.toString().trim();
+        if (response.isEmpty()) return;
+
+        // Parse and execute actions
+        response = parseAndExecuteActions(response, senderId, conversationId);
+
+        // Parse and save memories
+        response = parseAndSaveMemories(response, senderId);
+
+        // Save bot's response as a message
+        response = response.trim();
         if (!response.isEmpty()) {
             messageService.send(botUserId, conversationId, response, null);
         }
+    }
+
+    private String parseAndExecuteActions(String response, long senderId, long conversationId) {
+        // Match action tags — use a more forgiving pattern that handles content with special chars
+        Pattern actionPattern = Pattern.compile("\\[ACTION:(\\w+)\\|([^\\]]*)]");
+        Matcher m = actionPattern.matcher(response);
+        StringBuilder result = new StringBuilder();
+        int lastEnd = 0;
+
+        while (m.find()) {
+            String textBefore = response.substring(lastEnd, m.start()).trim();
+            result.append(response, lastEnd, m.start());
+            String action = m.group(1);
+            String params = m.group(2);
+            var paramMap = parseParams(params);
+
+            try {
+                switch (action) {
+                    case "CREATE_POST" -> {
+                        String content = paramMap.getOrDefault("content", "");
+                        // If content is empty/short/placeholder, use the text before the action tag
+                        if (content.length() < 10 || content.equals("...") || content.startsWith("...")) {
+                            content = extractPostContent(textBefore);
+                        }
+                        String targetType = paramMap.get("targetType");
+                        if (targetType == null) targetType = "GROUP_FEED";
+                        Long targetId = resolveTargetId(paramMap.get("targetId"), targetType, senderId);
+                        if (targetId != null && !content.isBlank()) {
+                            actionService.createPost(senderId, content, targetType, targetId);
+                            log.info("Bot executed CREATE_POST ({} chars) for user {} in {}", content.length(), senderId, targetId);
+                        } else {
+                            log.warn("CREATE_POST skipped: targetId={}, content length={}", targetId, content.length());
+                        }
+                    }
+                    case "CREATE_POLL" -> {
+                        String question = paramMap.getOrDefault("question", "");
+                        List<String> options = List.of(paramMap.getOrDefault("options", "").split(","));
+                        String targetType = paramMap.get("targetType");
+                        if (targetType == null) targetType = "GROUP_FEED";
+                        Long targetId = resolveTargetId(paramMap.get("targetId"), targetType, senderId);
+                        if (targetId != null) {
+                            actionService.createPollPost(senderId, question, options, targetType, targetId);
+                            log.info("Bot executed CREATE_POLL for user {} in {}", senderId, targetId);
+                        }
+                    }
+                    case "SEND_MESSAGE" -> {
+                        Long recipientId = resolveUserId(paramMap.getOrDefault("recipientId", "0"));
+                        String content = paramMap.getOrDefault("content", "");
+                        if (content.length() < 5) content = extractPostContent(textBefore);
+                        if (recipientId != null) {
+                            actionService.sendMessage(senderId, recipientId, content);
+                            log.info("Bot executed SEND_MESSAGE to {} for user {}", recipientId, senderId);
+                        } else {
+                            log.warn("SEND_MESSAGE: could not resolve recipient '{}'", paramMap.get("recipientId"));
+                            result.append("\n(Could not find that user to message)\n");
+                        }
+                    }
+                    case "JOIN_GROUP" -> {
+                        String groupRef = paramMap.getOrDefault("groupId", "0");
+                        Long groupId = resolveTargetId(groupRef, "GROUP_FEED", senderId);
+                        if (groupId != null) {
+                            actionService.joinGroup(senderId, groupId);
+                            log.info("Bot executed JOIN_GROUP for user {}", senderId);
+                        }
+                    }
+                    default -> log.warn("Unknown bot action: {}", action);
+                }
+            } catch (Exception e) {
+                log.error("Bot action {} failed: {}", action, e.getMessage());
+                result.append("\n(Action failed: ").append(e.getMessage()).append(")\n");
+            }
+            lastEnd = m.end();
+        }
+        result.append(response.substring(lastEnd));
+        return result.toString();
+    }
+
+    /**
+     * Extract the main content from the bot's response text to use as a post body.
+     * Strips leading/trailing boilerplate like "Here's the summary:" or "I'll post this for you".
+     */
+    private String extractPostContent(String text) {
+        if (text == null || text.isBlank()) return "";
+        // Remove common bot preamble/postamble
+        String cleaned = text
+                .replaceAll("(?i)^(here'?s?|i'?ll post|let me post|posting|sure|okay)[^\\n]*\\n?", "")
+                .replaceAll("(?i)\\n?(i'?ll post|let me|posted|done)[^\\n]*$", "")
+                .trim();
+        return cleaned.isEmpty() ? text.trim() : cleaned;
+    }
+
+    private String parseAndSaveMemories(String response, long userId) {
+        Pattern memPattern = Pattern.compile("\\[REMEMBER\\|([^\\]]+)]");
+        Matcher m = memPattern.matcher(response);
+        StringBuilder result = new StringBuilder();
+        int lastEnd = 0;
+
+        while (m.find()) {
+            result.append(response, lastEnd, m.start());
+            var params = parseParams(m.group(1));
+            String key = params.get("key");
+            String value = params.get("value");
+            if (key != null && value != null) {
+                memoryService.remember(userId, key, value);
+                log.info("Bot remembered '{}' for user {}", key, userId);
+            }
+            lastEnd = m.end();
+        }
+        result.append(response.substring(lastEnd));
+        return result.toString();
+    }
+
+    /**
+     * Resolve a user reference that may be a numeric ID, a username, or a display name.
+     */
+    private Long resolveUserId(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+
+        // Try numeric
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException ignored) {}
+
+        // Strip common LLM noise like (@username), URL encoding, extra text
+        String cleaned = raw.trim();
+        try { cleaned = java.net.URLDecoder.decode(cleaned, "UTF-8"); } catch (Exception ignored) {}
+        cleaned = cleaned
+                .replaceAll("\\(.*\\)", "")  // remove (parenthetical)
+                .replaceAll("@", "")
+                .replaceAll("%20", " ")
+                .trim();
+
+        // Try by username first
+        var byUsername = userRepository.findByUsername(cleaned);
+        if (byUsername.isPresent()) return byUsername.get().getId();
+
+        // Try name search
+        Long id = toolService.findUserByName(cleaned);
+        if (id != null) return id;
+
+        // Try individual words for multi-word names
+        if (cleaned.contains(" ")) {
+            id = toolService.findUserByName(cleaned.split("\\s+")[0]);
+            if (id != null) return id;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve a targetId that may be a numeric ID or a group/page name.
+     */
+    private Long resolveTargetId(String raw, String targetType, long userId) {
+        if (raw == null || raw.isBlank()) return null;
+
+        // Try parsing as number first
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException ignored) {}
+
+        // It's a name — resolve it
+        String name = raw.trim();
+        if ("GROUP_FEED".equals(targetType)) {
+            Long id = toolService.findGroupByName(name, userId);
+            if (id == null) id = toolService.findGroupByNameInMessage(name.toLowerCase(), userId);
+            if (id != null) return id;
+        }
+        if ("PAGE_FEED".equals(targetType)) {
+            Long id = toolService.findPageByName(name);
+            if (id != null) return id;
+        }
+
+        // Last resort: try as group name regardless of targetType
+        Long id = toolService.findGroupByName(name, userId);
+        if (id == null) id = toolService.findGroupByNameInMessage(name.toLowerCase(), userId);
+        return id;
+    }
+
+    private java.util.Map<String, String> parseParams(String params) {
+        var map = new java.util.LinkedHashMap<String, String>();
+        for (String pair : params.split("\\|")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                String key = pair.substring(0, eq).trim();
+                String value = pair.substring(eq + 1).trim();
+                // Decode URL-encoded values the LLM sometimes produces
+                try { value = java.net.URLDecoder.decode(value, "UTF-8"); } catch (Exception ignored) {}
+                map.put(key, value);
+            }
+        }
+        return map;
     }
 
     private String buildSystemPrompt() {
@@ -164,11 +369,20 @@ public class BotService {
                 "IMPORTANT: When asked to summarize, provide a thoughtful HIGH-LEVEL summary — identify themes, " +
                 "key decisions, important announcements, and notable activity. Do NOT just list every post verbatim. " +
                 "Group related items together, highlight what matters most, and provide insight. " +
-                "For example, instead of listing 7 individual posts, say something like: " +
-                "'The group has been focused on 3 main topics: infrastructure improvements (cloud migration, CI/CD), " +
-                "team recognition, and an upcoming all-hands meeting.' Then elaborate briefly on each theme. " +
                 "Be concise, friendly, and helpful. Cite authors when relevant. " +
-                "Format your responses with markdown when appropriate.";
+                "Format your responses with markdown when appropriate.\n\n" +
+                "ACTION CAPABILITIES: You can perform actions for the user. Include these EXACT tags in your response:\n" +
+                "  [ACTION:CREATE_POST|content=...|targetType=GROUP_FEED|targetId=<group name or ID>] - Post to a group\n" +
+                "  [ACTION:CREATE_POLL|question=...|options=Option A,Option B,Option C|targetType=GROUP_FEED|targetId=<group name or ID>] - Create a poll\n" +
+                "  [ACTION:SEND_MESSAGE|recipientId=...|content=...] - Send a DM to someone\n" +
+                "  [ACTION:JOIN_GROUP|groupId=...] - Join a group\n" +
+                "  [REMEMBER|key=...|value=...] - Remember something for the user\n" +
+                "For targetId you can use the group/page name (e.g. targetId=remote workers) and it will be resolved.\n" +
+                "For recipientId you can use the person's name (e.g. recipientId=Jeramy Osinski) and it will be resolved.\n" +
+                "IMPORTANT: When the user asks you to send a message, create a post, or take any action, DO IT IMMEDIATELY. " +
+                "Include the action tag in your response. Do NOT ask for confirmation — just execute and confirm what you did.\n\n" +
+                "MEMORY: If the user asks you to remember something, use [REMEMBER|key=...|value=...]. " +
+                "Their memories are provided in the context below.";
     }
 
     private String gatherContext(long conversationId, long senderId, String userMessage) {
@@ -176,11 +390,19 @@ public class BotService {
         String msg = userMessage != null ? userMessage.toLowerCase() : "";
         String original = userMessage != null ? userMessage : "";
 
-        // Include only the last 2 user messages for context (exclude bot's own prior responses
-        // to avoid self-reinforcing hallucinations)
-        String history = toolService.getConversationHistoryUsersOnly(conversationId, 3, botUserId);
+        // Include user memories
+        var memories = memoryService.recallAll(senderId);
+        if (!memories.isEmpty()) {
+            StringBuilder memSb = new StringBuilder("=== User's saved memories ===\n");
+            memories.forEach((k, v) -> memSb.append(k).append(": ").append(v).append("\n"));
+            contextParts.add(memSb.toString());
+        }
+
+        // Include recent conversation (both user and bot) for continuity
+        // so the bot knows who "them" or "that" refers to from its last answer
+        String history = toolService.getConversationHistory(conversationId, 6);
         if (!history.isBlank()) {
-            contextParts.add("=== Recent user messages ===\n" + history);
+            contextParts.add("=== Recent conversation ===\n" + history);
         }
 
         // --- GROUP detection ---
@@ -250,6 +472,8 @@ public class BotService {
         }
 
         // --- USER / PROFILE detection ---
+        boolean foundProfile = false;
+
         // From @[Name](id) mentions
         Matcher um = MENTION_PATTERN.matcher(original);
         while (um.find()) {
@@ -257,22 +481,38 @@ public class BotService {
                 long targetId = Long.parseLong(um.group(2));
                 if (targetId != botUserId) {
                     contextParts.add("=== Profile: " + um.group(1) + " ===\n" + toolService.getUserProfile(targetId));
+                    foundProfile = true;
                 }
             } catch (NumberFormatException ignored) {}
         }
-        // From natural language: "who is X", "about X", "tell me about X", "X's profile", "summarize X"
-        // Also try to detect capitalized names (First Last pattern) in the message
+
+        // From natural language name detection
         boolean profileNeeded = msg.contains("who is") || msg.contains("about") || msg.contains("tell me")
                 || msg.contains("profile") || msg.contains("summarize");
         if (profileNeeded) {
-            // Try extracting person name with multiple patterns
             String personName = extractPersonName(original);
             if (personName != null) {
                 Long userId = toolService.findUserByName(personName);
                 if (userId != null) {
                     contextParts.add("=== Profile ===\n" + toolService.getUserProfile(userId));
+                    foundProfile = true;
                     log.info("Profile loaded for '{}' -> user {}", personName, userId);
                 }
+            }
+        }
+
+        // --- WHO / WHAT questions: if we couldn't find a specific person or group,
+        // do a broad search to give the LLM something to work with ---
+        if (!foundProfile && (msg.contains("who") || msg.contains("which") || msg.contains("where"))) {
+            // Extract the key topic from the question for search
+            String topic = msg.replaceAll("(?i)\\b(who|which|what|where|is|are|the|on|in|of|a|an|can|you|tell|me|do|does|please|roid|@roid)\\b", " ")
+                    .replaceAll("\\s+", " ").replaceAll("[?!.]", "").trim();
+            if (topic.length() > 3) {
+                String searchResults = toolService.search(topic, senderId);
+                String userResults = toolService.searchUsers(topic);
+                contextParts.add("=== Search results ===\n" + searchResults);
+                contextParts.add("=== User search ===\n" + userResults);
+                log.info("Broad search for '{}': posts={} chars, users={} chars", topic, searchResults.length(), userResults.length());
             }
         }
 

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import type { PageDto, PostDto } from '../api/types';
@@ -39,6 +39,15 @@ export default function PagePage() {
     queryKey: ['page-following', pageId],
     queryFn: async () => {
       const { data } = await api.get(`/pages/${pageId}/following`);
+      return data;
+    },
+    enabled: !!pageId,
+  });
+
+  const { data: followers } = useQuery<{ id: number; username: string; displayName: string; avatarUrl: string | null }[]>({
+    queryKey: ['page-followers', pageId],
+    queryFn: async () => {
+      const { data } = await api.get(`/pages/${pageId}/followers`);
       return data;
     },
     enabled: !!pageId,
@@ -200,13 +209,34 @@ export default function PagePage() {
                     className="text-sm text-gray-500 mt-0.5"
                   />
                 )}
-                <p className="text-xs text-gray-400 mt-1">
-                  {page.followerCount} follower
-                  {page.followerCount !== 1 ? 's' : ''} &middot;{' '}
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                    {page.visibility}
+                <div className="flex items-center gap-2 mt-1.5">
+                  {followers && followers.length > 0 && (
+                    <div className="flex items-center">
+                      <div className="flex -space-x-2">
+                        {followers.slice(0, 8).map((f) => (
+                          <Link key={f.id} to={`/profile/${f.id}`} title={f.displayName || f.username} className="hover:opacity-80 transition-opacity">
+                            {f.avatarUrl ? (
+                              <img src={f.avatarUrl} alt="" className="w-7 h-7 rounded-full border-2 border-white object-cover" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full border-2 border-white bg-primary-500 text-white flex items-center justify-center text-[10px] font-semibold">
+                                {(f.displayName || '?')[0]?.toUpperCase()}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                      {followers.length > 8 && (
+                        <span className="text-[10px] text-gray-400 ml-1.5">+{followers.length - 8}</span>
+                      )}
+                    </div>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {page.followerCount} follower{page.followerCount !== 1 ? 's' : ''} &middot;{' '}
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                      {page.visibility}
+                    </span>
                   </span>
-                </p>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

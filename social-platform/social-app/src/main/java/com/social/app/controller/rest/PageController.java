@@ -1,6 +1,8 @@
 package com.social.app.controller.rest;
 
 import com.social.app.persistence.entity.PageEntity;
+import com.social.app.persistence.repository.PageMembershipRepository;
+import com.social.app.persistence.repository.UserRepository;
 import com.social.app.service.PageService;
 import com.social.app.service.PostService;
 import com.social.app.persistence.repository.PostRepository;
@@ -8,6 +10,7 @@ import com.social.core.dto.CreatePageRequest;
 import com.social.core.dto.MembershipDto;
 import com.social.core.dto.PageDto;
 import com.social.core.dto.PostDto;
+import com.social.core.dto.UserSummaryDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -22,13 +25,19 @@ public class PageController {
     private final PageService pageService;
     private final PostService postService;
     private final PostRepository postRepository;
+    private final PageMembershipRepository pageMembershipRepository;
+    private final UserRepository userRepository;
 
     public PageController(PageService pageService,
                           PostService postService,
-                          PostRepository postRepository) {
+                          PostRepository postRepository,
+                          PageMembershipRepository pageMembershipRepository,
+                          UserRepository userRepository) {
         this.pageService = pageService;
         this.postService = postService;
         this.postRepository = postRepository;
+        this.pageMembershipRepository = pageMembershipRepository;
+        this.userRepository = userRepository;
     }
 
     @PostMapping
@@ -121,6 +130,17 @@ public class PageController {
                 .map(p -> postService.toDto(p, userId))
                 .toList();
         return ResponseEntity.ok(posts);
+    }
+
+    @GetMapping("/{id}/followers")
+    public ResponseEntity<List<UserSummaryDto>> getPageFollowers(@PathVariable long id) {
+        var followers = pageMembershipRepository.findByPageIdAndStatus(id, "APPROVED");
+        var result = followers.stream()
+                .map(pm -> userRepository.findById(pm.getUserId()).orElse(null))
+                .filter(u -> u != null)
+                .map(u -> new UserSummaryDto(u.getId(), u.getUsername(), u.getDisplayName(), u.getAvatarUrl()))
+                .toList();
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/mine")

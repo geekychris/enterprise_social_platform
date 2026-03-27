@@ -51,3 +51,7 @@ social:
     name: ${SOCIAL_BOT_NAME:roid}
     max-context-tokens: ${SOCIAL_BOT_MAX_CONTEXT:3000}
     max-history-messages: ${SOCIAL_BOT_MAX_HISTORY:30}
+    digest:
+      enabled: ${SOCIAL_BOT_DIGEST_ENABLED:true}
+      cron: ${SOCIAL_BOT_DIGEST_CRON:0 0 8 * * *}
+      lookback-hours: ${SOCIAL_BOT_DIGEST_LOOKBACK:12}

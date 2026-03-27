@@ -19,20 +19,27 @@ public record PostDto(
         long commentCount,
         Instant createdAt,
         boolean recommended,
-        Double recommendationScore
+        Double recommendationScore,
+        PollDto poll
 ) {
-    /** Convenience constructor for organic (non-recommended) posts. */
+    /** Convenience constructor for organic (non-recommended) posts without a poll. */
     public PostDto(long id, UserSummaryDto author, String content, TargetType targetType,
                    long targetId, Visibility visibility, List<AttachmentDto> attachments,
                    Map<String, Long> reactionCounts, String currentUserReaction,
                    long commentCount, Instant createdAt) {
         this(id, author, content, targetType, targetId, visibility, attachments,
-             reactionCounts, currentUserReaction, commentCount, createdAt, false, null);
+             reactionCounts, currentUserReaction, commentCount, createdAt, false, null, null);
     }
 
     public PostDto asRecommended(double score) {
         return new PostDto(id, author, content, targetType, targetId, visibility,
                 attachments, reactionCounts, currentUserReaction, commentCount,
-                createdAt, true, score);
+                createdAt, true, score, poll);
+    }
+
+    public PostDto withPoll(PollDto poll) {
+        return new PostDto(id, author, content, targetType, targetId, visibility,
+                attachments, reactionCounts, currentUserReaction, commentCount,
+                createdAt, recommended, recommendationScore, poll);
     }
 }

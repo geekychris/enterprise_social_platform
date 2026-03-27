@@ -122,6 +122,84 @@ You: @roid search for any prior discussions about database migration
 
 ---
 
+## Actions — Roid Does Things For You
+
+Roid can take actions on your behalf, not just answer questions.
+
+### Creating Posts
+```
+You: Post in the engineering group: Reminder — standup moves to 10am next week
+Roid: Done! I've posted your reminder to the Engineering group.
+```
+
+### Creating Polls
+```
+You: Create a poll in remote workers: What day works for team lunch? Options: Monday, Wednesday, Friday
+Roid: Poll created! "What day works for team lunch?" with 3 options has been posted to Remote Workers.
+```
+Polls show up as interactive cards in the group feed. Members can vote directly on the post.
+
+### Sending Messages
+```
+You: Send a message to Alice: I'll be 10 minutes late to the meeting
+Roid: Message sent to Alice.
+```
+
+### Joining Groups
+```
+You: Join the design group
+Roid: You've been added to the Design group.
+```
+
+---
+
+## Memory — Roid Remembers
+
+Roid has cross-conversation memory. Things you tell it to remember persist and are available in future conversations.
+
+### Saving Memories
+```
+You: Remember that my favorite programming language is Rust
+Roid: Got it! I'll remember that your favorite language is Rust.
+
+// ... later, in a different conversation ...
+You: What's my favorite language?
+Roid: Your favorite programming language is Rust.
+```
+
+### How It Works
+- Memories are stored per-user in a database key-value store
+- They persist across all conversations with Roid
+- Roid automatically includes your memories in its context
+- Say "forget X" to remove a memory
+
+---
+
+## Daily Digest
+
+Roid sends you a morning summary of overnight activity (8:00 AM by default).
+
+**What's included:**
+- Unread message count
+- New posts in your groups since last digest
+- Pending friend requests
+
+The digest arrives as a regular DM from Roid. You can disable it in your profile settings.
+
+---
+
+## One-Click Summarize
+
+Two "Summarize" buttons are available throughout the app:
+
+### Conversation Summary
+In any message thread, click the **Summarize** button (sparkle icon) above the messages. Roid streams a structured summary with key topics, decisions, and action items.
+
+### Comment Thread Summary
+On any post with comments, click **Summarize** to get an AI-generated overview of the discussion, identifying points of agreement, disagreement, and conclusions.
+
+---
+
 ## How It Works (Technical)
 
 ### Trigger Conditions
@@ -158,9 +236,94 @@ Configurable in `application.yml`:
 | `social.bot.max-context-tokens` | `3000` | Max context size sent to model |
 | `social.ai.model` | `llama3.2:latest` | Ollama model to use |
 | `social.ai.ollama-url` | `http://localhost:11434` | Ollama server URL |
+| `social.bot.digest.enabled` | `true` | Enable/disable daily digest |
+| `social.bot.digest.cron` | `0 0 8 * * *` | Cron schedule for digest (default 8 AM) |
+| `social.bot.digest.lookback-hours` | `12` | Hours to look back for activity |
 
 ### Response Behavior
 - Roid responds **after** your message is saved (not while typing)
 - Responses typically take 5-15 seconds depending on the model and context size
 - Bot responses appear as regular messages from "Roid" — they persist like any other message
 - In polling-based clients (web, iOS), the response appears on the next refresh cycle (~3 seconds)
+
+---
+
+## Architecture: Cross-Conversation Memory
+
+### Design
+The memory system enables Roid to remember information across separate conversations with the same user.
+
+```
+┌──────────────────────────────────────────┐
+│              User sends message           │
+│  "Remember my favorite language is Rust"  │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│           BotService.gatherContext()      │
+│  1. Load existing memories from DB       │
+│  2. Include in LLM context               │
+│  3. Add conversation history + tools     │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│           Ollama LLM processes           │
+│  Sees: memories + context + user message │
+│  Outputs: response + [REMEMBER|...] tags │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│     BotService.parseAndSaveMemories()    │
+│  1. Extract [REMEMBER|key=...|value=...] │
+│  2. Upsert to bot_memory table           │
+│  3. Strip tags from response             │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│         Response saved as message         │
+│    "Got it! I'll remember that..."        │
+└──────────────────────────────────────────┘
+```
+
+### Database Schema
+```sql
+CREATE TABLE bot_memory (
+    id           BIGINT PRIMARY KEY,
+    user_id      BIGINT NOT NULL REFERENCES users(id),
+    memory_key   VARCHAR(128) NOT NULL,    -- e.g., "favorite_language"
+    memory_value TEXT NOT NULL,             -- e.g., "Rust"
+    created_at   TIMESTAMPTZ NOT NULL,
+    updated_at   TIMESTAMPTZ NOT NULL,
+    UNIQUE (user_id, memory_key)           -- one value per key per user
+);
+```
+
+### Key Properties
+- **Per-user isolation** — each user's memories are private and separate
+- **Upsert semantics** — saving the same key updates the value rather than duplicating
+- **Automatic inclusion** — all memories are loaded into context on every bot interaction
+- **Context budget** — memories count against the context window limit; oldest are trimmed if needed
+- **No cross-user leakage** — memory queries are always scoped to the authenticated user's ID
+
+### Action Execution Architecture
+```
+User message → BotService.handleMessage()
+                    │
+                    ├── gatherContext() — reads memories, conversation, groups, pages, etc.
+                    │
+                    ├── ollamaService.chatBlocking() — LLM generates response with [ACTION:...] tags
+                    │
+                    ├── parseAndExecuteActions() — finds tags, calls BotActionService methods:
+                    │       ├── createPost()     → PostRepository.save()
+                    │       ├── createPollPost() → PostRepository.save() + PollService.createPoll()
+                    │       ├── sendMessage()    → ConversationService + MessageService
+                    │       └── joinGroup()      → GroupService.join()
+                    │
+                    ├── parseAndSaveMemories() — finds [REMEMBER|...] tags, calls BotMemoryService
+                    │
+                    └── messageService.send() — saves cleaned response as bot message
+```

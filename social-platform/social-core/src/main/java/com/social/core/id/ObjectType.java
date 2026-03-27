@@ -16,7 +16,10 @@ public enum ObjectType {
     REACTION((byte) 0x09),
     MESSAGE((byte) 0x0A),
     INVITE_TOKEN((byte) 0x0B),
-    CONVERSATION((byte) 0x0C);
+    CONVERSATION((byte) 0x0C),
+    POLL((byte) 0x0D),
+    POLL_OPTION((byte) 0x0E),
+    BOT_MEMORY((byte) 0x0F);
 
     private final byte code;
 

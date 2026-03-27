@@ -54,6 +54,24 @@ export interface PostDto {
   createdAt: string;
   recommended: boolean;
   recommendationScore: number | null;
+  poll: PollDto | null;
+}
+
+export interface PollDto {
+  id: number;
+  question: string;
+  allowMultiple: boolean;
+  closesAt: string | null;
+  closed: boolean;
+  options: PollOptionDto[];
+  totalVotes: number;
+  currentUserVotes: number[];
+}
+
+export interface PollOptionDto {
+  id: number;
+  label: string;
+  voteCount: number;
 }
 
 export interface CommentDto {

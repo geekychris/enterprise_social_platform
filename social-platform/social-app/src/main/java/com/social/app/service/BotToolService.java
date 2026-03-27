@@ -257,8 +257,45 @@ public class BotToolService {
      * Find a user by name.
      */
     public Long findUserByName(String nameQuery) {
-        var results = userRepository.searchByUsernameOrDisplayName("%" + nameQuery + "%");
+        var results = userRepository.searchByUsernameOrDisplayName(nameQuery);
         return results.isEmpty() ? null : results.get(0).getId();
+    }
+
+    /**
+     * Search users by name/title/department/skills.
+     */
+    /**
+     * Search users by name, title, department, skills, etc.
+     * Searches each word in the query independently for broader matches.
+     */
+    public String searchUsers(String query) {
+        // Search for the full query first
+        var users = userRepository.searchByUsernameOrDisplayName(query);
+
+        // If no results, try individual significant words
+        if (users.isEmpty()) {
+            for (String word : query.split("\\s+")) {
+                if (word.length() >= 3) {
+                    var partial = userRepository.searchByUsernameOrDisplayName(word);
+                    users.addAll(partial);
+                }
+            }
+            // Deduplicate
+            var seen = new java.util.HashSet<Long>();
+            users = users.stream().filter(u -> seen.add(u.getId())).collect(java.util.stream.Collectors.toList());
+        }
+
+        if (users.isEmpty()) return "No users found matching \"" + query + "\"";
+
+        StringBuilder sb = new StringBuilder("Users matching \"" + query + "\":\n");
+        for (var u : users.stream().filter(u -> !u.isBot()).limit(8).toList()) {
+            sb.append("- ").append(u.getDisplayName()).append(" (@").append(u.getUsername()).append(")");
+            if (u.getJobTitle() != null) sb.append(" — ").append(u.getJobTitle());
+            if (u.getDepartment() != null) sb.append(", ").append(u.getDepartment());
+            if (u.getSkills() != null) sb.append(" [skills: ").append(truncate(u.getSkills(), 100)).append("]");
+            sb.append("\n");
+        }
+        return sb.toString();
     }
 
     private String truncate(String text, int maxLen) {

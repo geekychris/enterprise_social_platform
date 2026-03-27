@@ -8,6 +8,7 @@ import ReactionBar from './ReactionBar';
 import RichContent from './RichContent';
 import AttachmentViewer from '../media/AttachmentViewer';
 import LinkPreview from './LinkPreview';
+import PollDisplay from '../poll/PollDisplay';
 import PostDetail from '../post/PostDetail';
 import { formatRelativeTime } from '../../utils';
 
@@ -282,6 +283,13 @@ export default function PostCard({ post, pinned, onPin, onUnpin, canPin, default
       {post.attachments?.length > 0 && (
         <div className="px-4 pb-3">
           <AttachmentViewer attachments={post.attachments} />
+        </div>
+      )}
+
+      {/* Poll */}
+      {post.poll && (
+        <div className="px-4 pb-2">
+          <PollDisplay poll={post.poll} postId={post.id} />
         </div>
       )}
 
