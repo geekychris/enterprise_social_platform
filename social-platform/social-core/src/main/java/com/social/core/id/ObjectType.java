@@ -19,7 +19,9 @@ public enum ObjectType {
     CONVERSATION((byte) 0x0C),
     POLL((byte) 0x0D),
     POLL_OPTION((byte) 0x0E),
-    BOT_MEMORY((byte) 0x0F);
+    BOT_MEMORY((byte) 0x0F),
+    ORG_UNIT((byte) 0x10),
+    ORG_ASSIGNMENT((byte) 0x11);
 
     private final byte code;
 

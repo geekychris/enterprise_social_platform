@@ -26,6 +26,15 @@ export default function UserProfile({ userId }: Props) {
     },
   });
 
+  // Org assignments
+  const { data: orgAssignments } = useQuery<{ id: number; title: string; orgUnitName: string; level: string; relationshipType: string; reportsToUserName: string | null }[]>({
+    queryKey: ['org-assignments', userId],
+    queryFn: async () => {
+      const { data } = await api.get(`/org/assignments/user/${userId}`);
+      return data;
+    },
+  });
+
   // Friend / follow status
   const { data: friendStatus } = useQuery<{ status: string; requestId?: number }>({
     queryKey: ['friend-status', userId],
@@ -139,6 +148,9 @@ export default function UserProfile({ userId }: Props) {
                 {user.jobTitle}
                 {user.department && <span className="text-gray-400"> · {user.department}</span>}
               </p>
+            )}
+            {orgAssignments && orgAssignments.length > 0 && (
+              <ProfileOrgTree userId={userId} assignments={orgAssignments} navigate={navigate} />
             )}
           </div>
           {isOwnProfile ? (
@@ -493,6 +505,162 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
     <div>
       <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
       <input type={type} value={value} onChange={onChange} placeholder={placeholder} className="input-field" />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Inline Org Tree on Profile                                          */
+/* ------------------------------------------------------------------ */
+
+function ProfileOrgTree({ userId, assignments, navigate }: {
+  userId: number | string;
+  assignments: { id: number; title: string; orgUnitName: string; level: string; relationshipType: string; reportsToUserName: string | null }[];
+  navigate: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: chain, isLoading: chainLoading } = useQuery<{
+    id: number; userId: number; userName: string; userAvatarUrl: string | null;
+    title: string; level: string; orgUnitName: string;
+  }[]>({
+    queryKey: ['org-chain', userId],
+    queryFn: async () => { const { data } = await api.get(`/org/assignments/chain/${userId}`); return data; },
+    staleTime: 60000,
+    enabled: expanded,
+  });
+
+  const { data: reports, isLoading: reportsLoading } = useQuery<{
+    id: number; userId: number; userName: string; userAvatarUrl: string | null;
+    title: string; level: string;
+  }[]>({
+    queryKey: ['org-reports', userId],
+    queryFn: async () => { const { data } = await api.get(`/org/assignments/reports/${userId}`); return data; },
+    staleTime: 60000,
+    enabled: expanded,
+  });
+
+  const reversedChain = chain ? [...chain].reverse() : [];
+  const currentAssignment = assignments[0];
+  const loading = expanded && (chainLoading || reportsLoading);
+
+  return (
+    <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden">
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 p-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+      >
+        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+        </svg>
+        <span className="text-xs font-medium text-gray-700 flex-1">
+          {currentAssignment.title} · {currentAssignment.orgUnitName}
+          {currentAssignment.reportsToUserName && (
+            <span className="text-gray-400"> → reports to {currentAssignment.reportsToUserName}</span>
+          )}
+        </span>
+        <span className={`text-[10px] text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+
+      {/* Expanded tree */}
+      {expanded && (
+        <div className="p-3 bg-white border-t border-gray-100">
+          {loading ? (
+            <div className="text-xs text-gray-400 py-2 text-center">Loading org...</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-end mb-2">
+                <button
+                  onClick={() => navigate(`/org?user=${userId}`)}
+                  className="text-[10px] text-primary-600 hover:underline"
+                >
+                  Full org view →
+                </button>
+              </div>
+
+      {/* Chain upward */}
+      {reversedChain.map((a, i) => (
+        <div key={a.id} className="flex items-center gap-1.5 py-0.5" style={{ paddingLeft: `${i * 12}px` }}>
+          {i > 0 && <span className="text-gray-300 text-[10px]">└</span>}
+          <Link
+            to={`/profile/${a.userId}`}
+            className="flex items-center gap-1.5 hover:bg-primary-50 rounded px-1.5 py-0.5 transition-colors group"
+          >
+            {a.userAvatarUrl ? (
+              <img src={a.userAvatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
+            ) : (
+              <div className="w-5 h-5 bg-primary-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                {a.userName[0]?.toUpperCase()}
+              </div>
+            )}
+            <span className="text-[11px] text-gray-700 group-hover:text-primary-700 group-hover:underline">{a.userName}</span>
+            <span className="text-[9px] text-gray-400">{a.title}</span>
+          </Link>
+        </div>
+      ))}
+
+      {/* Current user — highlighted */}
+      <div
+        className="flex items-center gap-1.5 py-1 px-1.5 bg-primary-100 rounded-md border border-primary-200 my-1"
+        style={{ paddingLeft: `${(reversedChain.length) * 12}px` }}
+      >
+        {reversedChain.length > 0 && <span className="text-primary-400 text-[10px]">└</span>}
+        <div className="w-5 h-5 bg-primary-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold">★</div>
+        <span className="text-[11px] font-semibold text-primary-800">{currentAssignment.title}</span>
+        <span className="text-[9px] text-primary-600">· {currentAssignment.orgUnitName}</span>
+        <span className="text-[8px] bg-primary-200 text-primary-700 px-1 py-0.5 rounded ml-1">{currentAssignment.level}</span>
+        {currentAssignment.relationshipType === 'DOTTED' && (
+          <span className="text-[8px] bg-yellow-200 text-yellow-700 px-1 py-0.5 rounded">dotted</span>
+        )}
+      </div>
+
+      {/* Direct reports */}
+      {reports && reports.length > 0 && (
+        <div style={{ paddingLeft: `${(reversedChain.length + 1) * 12}px` }}>
+          {reports.slice(0, 6).map((r) => (
+            <div key={r.id} className="flex items-center gap-1.5 py-0.5">
+              <span className="text-gray-300 text-[10px]">└</span>
+              <Link
+                to={`/profile/${r.userId}`}
+                className="flex items-center gap-1.5 hover:bg-primary-50 rounded px-1.5 py-0.5 transition-colors group"
+              >
+                {r.userAvatarUrl ? (
+                  <img src={r.userAvatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                  <div className="w-5 h-5 bg-gray-400 text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                    {r.userName[0]?.toUpperCase()}
+                  </div>
+                )}
+                <span className="text-[11px] text-gray-700 group-hover:text-primary-700 group-hover:underline">{r.userName}</span>
+                <span className="text-[9px] text-gray-400">{r.title}</span>
+              </Link>
+            </div>
+          ))}
+          {reports.length > 6 && (
+            <button onClick={() => navigate(`/org?user=${userId}`)} className="text-[10px] text-primary-600 hover:underline ml-6 mt-0.5">
+              +{reports.length - 6} more reports
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Additional assignments (dotted lines) */}
+      {assignments.length > 1 && (
+        <div className="mt-2 pt-2 border-t border-gray-200">
+          <span className="text-[9px] text-gray-400">Also:</span>
+          {assignments.slice(1).map((a) => (
+            <div key={a.id} className="text-[10px] text-gray-500 mt-0.5 ml-2">
+              {a.title} in {a.orgUnitName}
+              {a.relationshipType === 'DOTTED' && <span className="text-yellow-600 ml-1">(dotted line)</span>}
+            </div>
+          ))}
+        </div>
+      )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

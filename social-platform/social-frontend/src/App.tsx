@@ -13,6 +13,7 @@ import AboutPage from './pages/AboutPage';
 import AdminPage from './pages/AdminPage';
 import PostPage from './pages/PostPage';
 import SetupPage from './pages/SetupPage';
+import OrgPage from './pages/OrgPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => !!s.token || !!s.debugUserId);
@@ -40,6 +41,7 @@ export default function App() {
                 <Route path="/messages" element={<MessagesPage />} />
                 <Route path="/messages/:conversationId" element={<MessagesPage />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/org" element={<OrgPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/admin/*" element={<AdminPage />} />
               </Routes>

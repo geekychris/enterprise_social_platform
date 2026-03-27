@@ -218,6 +218,125 @@ public class OrgGenerator {
         return ids;
     }
 
+    /**
+     * Generate a realistic org structure: Company → Divisions → Departments → Teams
+     * Assigns users to positions with reporting lines and dotted-line relationships.
+     */
+    public void generateOrgStructure(List<GlobalId> userIds) {
+        log.info("Generating org structure...");
+        if (userIds.size() < 20) {
+            log.warn("  Not enough users ({}) for org structure, skipping", userIds.size());
+            return;
+        }
+
+        int idx = 0; // pointer into userIds for assigning people
+
+        // 1. Company root
+        long companyId = idGen.next(ObjectType.ORG_UNIT).value();
+        long ceoUserId = userIds.get(idx++).value();
+        insertOrgUnit(companyId, "WorkSphere Inc.", "COMPANY", null, ceoUserId, "Global enterprise social platform company", "CORP-001");
+        insertAssignment(userIds.get(0).value(), ceoUserId, companyId, "Chief Executive Officer", "SOLID", null, "CEO");
+
+        // 2. C-Suite under CEO
+        String[][] cSuite = {
+            {"Office of the CFO", "Chief Financial Officer", "C_SUITE"},
+            {"Office of the CTO", "Chief Technology Officer", "C_SUITE"},
+            {"Office of the COO", "Chief Operating Officer", "C_SUITE"},
+            {"Office of the CPO", "Chief Product Officer", "C_SUITE"},
+            {"Office of the CHRO", "Chief Human Resources Officer", "C_SUITE"},
+        };
+        long[] cSuiteUnitIds = new long[cSuite.length];
+        long[] cSuiteUserIds = new long[cSuite.length];
+        for (int i = 0; i < cSuite.length && idx < userIds.size(); i++) {
+            cSuiteUnitIds[i] = idGen.next(ObjectType.ORG_UNIT).value();
+            cSuiteUserIds[i] = userIds.get(idx++).value();
+            insertOrgUnit(cSuiteUnitIds[i], cSuite[i][0], "DIVISION", companyId, cSuiteUserIds[i], null, "DIV-" + (i + 1));
+            insertAssignment(idGen.next(ObjectType.ORG_ASSIGNMENT).value(), cSuiteUserIds[i], cSuiteUnitIds[i], cSuite[i][1], "SOLID", ceoUserId, cSuite[i][2]);
+        }
+
+        // 3. Departments under each division
+        String[][][] departments = {
+            // Under CFO
+            {{"Finance", "VP of Finance", "VP"}, {"Accounting", "Director of Accounting", "DIRECTOR"}, {"FP&A", "Director of FP&A", "DIRECTOR"}},
+            // Under CTO
+            {{"Engineering", "VP of Engineering", "VP"}, {"Platform", "VP of Platform", "VP"}, {"Security", "Director of Security", "DIRECTOR"}, {"Data Science", "VP of Data Science", "VP"}},
+            // Under COO
+            {{"Operations", "VP of Operations", "VP"}, {"IT", "Director of IT", "DIRECTOR"}, {"Facilities", "Director of Facilities", "DIRECTOR"}},
+            // Under CPO
+            {{"Product", "VP of Product", "VP"}, {"Design", "VP of Design", "VP"}, {"Research", "Director of Research", "DIRECTOR"}},
+            // Under CHRO
+            {{"People Ops", "VP of People Ops", "VP"}, {"Talent Acquisition", "Director of TA", "DIRECTOR"}, {"Learning & Dev", "Director of L&D", "DIRECTOR"}},
+        };
+
+        List<long[]> deptList = new ArrayList<>(); // [deptUnitId, deptHeadUserId, divisionIdx]
+        for (int d = 0; d < departments.length && d < cSuiteUnitIds.length; d++) {
+            for (String[] dept : departments[d]) {
+                if (idx >= userIds.size()) break;
+                long deptId = idGen.next(ObjectType.ORG_UNIT).value();
+                long headId = userIds.get(idx++).value();
+                insertOrgUnit(deptId, dept[0], "DEPARTMENT", cSuiteUnitIds[d], headId, null, null);
+                insertAssignment(idGen.next(ObjectType.ORG_ASSIGNMENT).value(), headId, deptId, dept[1], "SOLID", cSuiteUserIds[d], dept[2]);
+                deptList.add(new long[]{deptId, headId, d});
+            }
+        }
+
+        // 4. Teams under departments, assign remaining users as managers and ICs
+        String[] teamSuffixes = {"Alpha", "Beta", "Core", "Growth", "Platform", "Infrastructure", "Mobile", "Web"};
+        List<long[]> managerList = new ArrayList<>(); // [managerUserId, teamUnitId]
+
+        for (long[] dept : deptList) {
+            long deptId = dept[0];
+            long deptHead = dept[1];
+            // Create 1-2 teams per department
+            int numTeams = 1 + random.nextInt(2);
+            for (int t = 0; t < numTeams && idx < userIds.size(); t++) {
+                long teamId = idGen.next(ObjectType.ORG_UNIT).value();
+                long managerId = userIds.get(idx++).value();
+                String teamName = teamSuffixes[random.nextInt(teamSuffixes.length)] + " Team";
+                insertOrgUnit(teamId, teamName, "TEAM", deptId, managerId, null, null);
+                insertAssignment(idGen.next(ObjectType.ORG_ASSIGNMENT).value(), managerId, teamId, "Engineering Manager", "SOLID", deptHead, "MANAGER");
+                managerList.add(new long[]{managerId, teamId});
+            }
+        }
+
+        // 5. Assign remaining users as ICs across teams
+        String[] icTitles = {"Software Engineer", "Senior Software Engineer", "Staff Engineer", "Principal Engineer",
+                "Product Manager", "Designer", "Senior Designer", "Data Analyst", "QA Engineer",
+                "Technical Writer", "Scrum Master", "DevOps Engineer", "SRE"};
+        String[] icLevels = {"JUNIOR", "MID", "SENIOR", "LEAD", "SENIOR", "MID"};
+
+        while (idx < userIds.size() && !managerList.isEmpty()) {
+            long userId = userIds.get(idx++).value();
+            long[] team = managerList.get(random.nextInt(managerList.size()));
+            String title = icTitles[random.nextInt(icTitles.length)];
+            String level = icLevels[random.nextInt(icLevels.length)];
+            insertAssignment(idGen.next(ObjectType.ORG_ASSIGNMENT).value(), userId, team[1], title, "SOLID", team[0], level);
+
+            // 10% chance of dotted-line to another team
+            if (random.nextInt(10) == 0 && managerList.size() > 1) {
+                long[] otherTeam = managerList.get(random.nextInt(managerList.size()));
+                if (otherTeam[1] != team[1]) {
+                    try {
+                        insertAssignment(idGen.next(ObjectType.ORG_ASSIGNMENT).value(), userId, otherTeam[1], title + " (Advisor)", "DOTTED", otherTeam[0], level);
+                    } catch (Exception ignored) {} // unique constraint
+                }
+            }
+        }
+
+        log.info("  Org structure generated: {} departments, {} teams, {} users assigned",
+                deptList.size(), managerList.size(), idx);
+    }
+
+    private void insertOrgUnit(long id, String name, String type, Long parentId, Long headUserId, String description, String costCenter) {
+        jdbc.update("INSERT INTO org_units (id, name, type, parent_id, head_user_id, description, cost_center) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                id, name, type, parentId, headUserId, description, costCenter);
+    }
+
+    private void insertAssignment(long id, long userId, long orgUnitId, String title, String relType, Long reportsTo, String level) {
+        jdbc.update("INSERT INTO org_assignments (id, user_id, org_unit_id, title, relationship_type, reports_to_user_id, level) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                id, userId, orgUnitId, title, relType, reportsTo, level);
+    }
+
     public List<GlobalId> generateProjects(int count, List<GlobalId> pageIds) {
         log.info("Generating {} projects...", count);
         List<GlobalId> ids = new ArrayList<>(count);

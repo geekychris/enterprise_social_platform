@@ -79,6 +79,11 @@ public class DataGenOrchestrator {
         List<GlobalId> pageIds = orgGen.generatePages(config.pages);
         List<GlobalId> projectIds = orgGen.generateProjects(config.projects, pageIds);
 
+        // ---- Phase 2b: Org Structure ----
+        log.info("");
+        log.info("--- Phase 2b: Organizational Structure ---");
+        orgGen.generateOrgStructure(userIds);
+
         // ---- Phase 3: Social Graph ----
         log.info("");
         log.info("--- Phase 3: Memberships and Follows ---");

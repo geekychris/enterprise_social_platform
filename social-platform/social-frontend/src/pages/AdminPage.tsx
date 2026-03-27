@@ -4,8 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ForceGraph2D from 'react-force-graph-2d';
 import { useAuth } from '../hooks/useAuth';
 import api from '../api/client';
+import OrgAdminTab from '../components/admin/OrgAdminTab';
 
-type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph';
+type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org';
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -13,6 +14,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'users', label: 'User Management' },
   { key: 'content', label: 'Content' },
   { key: 'groups-pages', label: 'Groups & Pages' },
+  { key: 'org', label: 'Organization' },
   { key: 'graph', label: 'Graph Explorer' },
 ];
 
@@ -73,6 +75,7 @@ export default function AdminPage() {
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'content' && <ContentTab />}
       {activeTab === 'groups-pages' && <GroupsPagesTab />}
+      {activeTab === 'org' && <OrgAdminTab />}
       {activeTab === 'graph' && <GraphExplorerTab />}
     </div>
   );

@@ -346,6 +346,73 @@ public class BotService {
         return id;
     }
 
+    /**
+     * Extract a person's name after keywords like "reports to Bob", "manages Alice".
+     */
+    private String extractPersonAfterKeyword(String msg, String... keywords) {
+        for (String kw : keywords) {
+            int idx = msg.toLowerCase().indexOf(kw.toLowerCase());
+            if (idx >= 0) {
+                String after = msg.substring(idx + kw.length()).trim();
+                // Take the first 1-3 capitalized words
+                Matcher m = Pattern.compile("([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+){0,2})").matcher(after);
+                if (m.find()) {
+                    String name = m.group(1).trim();
+                    if (!name.matches("(?i)(This|That|The|Roid|Can|You)")) return name;
+                }
+                // Fallback: take first 2 words
+                String[] words = after.split("\\s+");
+                if (words.length >= 1 && words[0].length() > 1) {
+                    String name = words[0];
+                    if (words.length > 1) name += " " + words[1];
+                    return name.replaceAll("[?.,!]", "").trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extract possessive person: "bob's org", "alice's team".
+     */
+    private String extractPossessivePerson(String msg) {
+        Matcher m = Pattern.compile("([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)?)'s\\s+(?:org|team|group|department|division)", Pattern.CASE_INSENSITIVE).matcher(msg);
+        if (m.find()) return m.group(1).trim();
+        // Also try "in X org"
+        m = Pattern.compile("in\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)?)'?s?\\s+org", Pattern.CASE_INSENSITIVE).matcher(msg);
+        if (m.find()) return m.group(1).trim();
+        return null;
+    }
+
+    /**
+     * Extract the search criteria from an org query.
+     * "who in the org has data analytics skills" → "data analytics"
+     * "list all the engineers" → "engineers"
+     * "who works from mountain view" → "mountain view"
+     */
+    private String extractOrgSearchQuery(String msg) {
+        // "has X skills" / "with X skills"
+        Matcher m = Pattern.compile("(?:has|with|have)\\s+(.+?)\\s*(?:skills?|experience|expertise)", Pattern.CASE_INSENSITIVE).matcher(msg);
+        if (m.find()) return m.group(1).trim();
+
+        // "works from X" / "based in X" / "located in X"
+        m = Pattern.compile("(?:works? from|based in|located in|lives? in)\\s+(.+?)(?:\\?|$)", Pattern.CASE_INSENSITIVE).matcher(msg);
+        if (m.find()) return m.group(1).trim();
+
+        // "all the X" / "list X" / "find X"
+        m = Pattern.compile("(?:all the|list all|list the|find all|find the|every)\\s+(.+?)(?:\\s+in\\s+|\\?|$)", Pattern.CASE_INSENSITIVE).matcher(msg);
+        if (m.find()) {
+            String result = m.group(1).trim().replaceAll("(?i)\\b(in|this|the|org|organization)\\b", "").trim();
+            if (result.length() > 2) return result;
+        }
+
+        // Generic: strip common words and take what's left after "org"
+        m = Pattern.compile("org\\w*\\s+(?:has|with|who|that)\\s+(.+?)(?:\\?|$)", Pattern.CASE_INSENSITIVE).matcher(msg);
+        if (m.find()) return m.group(1).trim();
+
+        return null;
+    }
+
     private java.util.Map<String, String> parseParams(String params) {
         var map = new java.util.LinkedHashMap<String, String>();
         for (String pair : params.split("\\|")) {
@@ -468,6 +535,47 @@ public class BotService {
             String query = extractSearchQuery(msg);
             if (query != null) {
                 contextParts.add("=== Search results ===\n" + toolService.search(query, senderId));
+            }
+        }
+
+        // --- ORG detection ---
+        boolean orgQuery = msg.contains("org") || msg.contains("report") || msg.contains("manages")
+                || msg.contains("team") || msg.contains("hierarchy") || msg.contains("direct report")
+                || msg.contains("chain of command") || msg.contains("works for");
+
+        if (orgQuery) {
+            // "who reports to X"
+            if (msg.contains("report") || msg.contains("manages") || msg.contains("direct report")) {
+                String personName = extractPersonAfterKeyword(original, "reports to", "manages", "works for", "under");
+                if (personName != null) {
+                    contextParts.add("=== Org: Direct reports ===\n" + toolService.getDirectReports(personName));
+                    log.info("Org query: reports of '{}'", personName);
+                }
+            }
+
+            // "who in X's org" / "in bob's org" / "bob's team"
+            String possessivePerson = extractPossessivePerson(original);
+            String orgSearchQuery = extractOrgSearchQuery(msg);
+
+            if (possessivePerson != null && orgSearchQuery != null) {
+                contextParts.add("=== Org search (scoped) ===\n" + toolService.searchOrg(orgSearchQuery, possessivePerson));
+                log.info("Org search: '{}' in {}'s org", orgSearchQuery, possessivePerson);
+            } else if (orgSearchQuery != null && orgSearchQuery.length() > 2) {
+                contextParts.add("=== Org search ===\n" + toolService.searchOrg(orgSearchQuery, null));
+                log.info("Org search: '{}'", orgSearchQuery);
+            }
+
+            // "list all engineers" / "all the X in this org"
+            if (msg.contains("list") || msg.contains("all the") || msg.contains("everyone")) {
+                String role = extractOrgSearchQuery(msg);
+                if (role != null) {
+                    contextParts.add("=== Org role search ===\n" + toolService.searchOrg(role, null));
+                }
+            }
+
+            // General org overview if no specific query matched
+            if (contextParts.stream().noneMatch(p -> p.contains("=== Org"))) {
+                contextParts.add("=== Org overview ===\n" + toolService.getOrgOverview());
             }
         }
 

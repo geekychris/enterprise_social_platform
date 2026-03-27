@@ -26,6 +26,9 @@ public class BotToolService {
     private final GroupRepository groupRepository;
     private final PageRepository pageRepository;
     private final FeedService feedService;
+    private final OrgService orgService;
+    private final OrgAssignmentRepository orgAssignmentRepository;
+    private final OrgUnitRepository orgUnitRepository;
 
     private final int MAX_CHARS_PER_POST = 300;
     private final int MAX_POSTS = 10;
@@ -35,7 +38,9 @@ public class BotToolService {
     public BotToolService(PostRepository postRepository, PostService postService,
                           UserRepository userRepository, MessageRepository messageRepository,
                           MembershipRepository membershipRepository, GroupRepository groupRepository,
-                          PageRepository pageRepository, FeedService feedService) {
+                          PageRepository pageRepository, FeedService feedService,
+                          OrgService orgService, OrgAssignmentRepository orgAssignmentRepository,
+                          OrgUnitRepository orgUnitRepository) {
         this.postRepository = postRepository;
         this.postService = postService;
         this.userRepository = userRepository;
@@ -44,6 +49,9 @@ public class BotToolService {
         this.groupRepository = groupRepository;
         this.pageRepository = pageRepository;
         this.feedService = feedService;
+        this.orgService = orgService;
+        this.orgAssignmentRepository = orgAssignmentRepository;
+        this.orgUnitRepository = orgUnitRepository;
     }
 
     /**
@@ -296,6 +304,190 @@ public class BotToolService {
             sb.append("\n");
         }
         return sb.toString();
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Org tools
+    // ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Get who reports to a specific person.
+     */
+    public String getDirectReports(String personName) {
+        Long userId = findUserByName(personName);
+        if (userId == null) return "Could not find user \"" + personName + "\"";
+
+        var reports = orgAssignmentRepository.findByReportsToUserId(userId);
+        if (reports.isEmpty()) {
+            String name = userRepository.findById(userId).map(u -> u.getDisplayName()).orElse(personName);
+            return name + " has no direct reports.";
+        }
+
+        String managerName = userRepository.findById(userId).map(u -> u.getDisplayName()).orElse(personName);
+        StringBuilder sb = new StringBuilder("Direct reports of " + managerName + ":\n");
+        for (var r : reports) {
+            var user = userRepository.findById(r.getUserId()).orElse(null);
+            if (user == null) continue;
+            sb.append("- ").append(user.getDisplayName());
+            if (r.getTitle() != null) sb.append(" — ").append(r.getTitle());
+            if (r.getLevel() != null) sb.append(" (").append(r.getLevel()).append(")");
+            if (r.getRelationshipType().equals("DOTTED")) sb.append(" [dotted line]");
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Get the reporting chain for a person (up to CEO).
+     */
+    public String getReportingChain(String personName) {
+        Long userId = findUserByName(personName);
+        if (userId == null) return "Could not find user \"" + personName + "\"";
+
+        var chain = orgService.getReportingChain(userId);
+        if (chain.isEmpty()) return personName + " has no reporting chain defined.";
+
+        StringBuilder sb = new StringBuilder("Reporting chain for " + personName + " (upward):\n");
+        for (var a : chain) {
+            sb.append("  → ").append(a.userName()).append(" — ").append(a.title())
+              .append(" (").append(a.level()).append(")\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Get all members of an org unit by name.
+     */
+    public String getOrgUnitMembers(String unitName) {
+        var units = orgUnitRepository.searchByName(unitName);
+        if (units.isEmpty()) return "Could not find org unit \"" + unitName + "\"";
+
+        var unit = units.get(0);
+        var members = orgService.getUnitMembers(unit.getId());
+        if (members.isEmpty()) return "Org unit \"" + unit.getName() + "\" has no members.";
+
+        StringBuilder sb = new StringBuilder("Members of " + unit.getName() + " (" + unit.getType() + "):\n");
+        for (var m : members) {
+            sb.append("- ").append(m.userName()).append(" — ").append(m.title())
+              .append(" (").append(m.level()).append(")");
+            if ("DOTTED".equals(m.relationshipType())) sb.append(" [dotted line]");
+            sb.append("\n");
+        }
+        // Also include members of child units
+        var children = orgUnitRepository.findByParentId(unit.getId());
+        for (var child : children) {
+            var childMembers = orgService.getUnitMembers(child.getId());
+            if (!childMembers.isEmpty()) {
+                sb.append("\n").append(child.getName()).append(" (").append(child.getType()).append("):\n");
+                for (var m : childMembers) {
+                    sb.append("  - ").append(m.userName()).append(" — ").append(m.title()).append("\n");
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Search org for people matching criteria: skills, title, location, etc.
+     * within a specific person's org subtree or across the whole org.
+     */
+    public String searchOrg(String query, String scopePersonName) {
+        // If scoped to a person's org, get their org unit and search within it
+        List<Long> scopeUserIds = null;
+        String scopeLabel = "the organization";
+
+        if (scopePersonName != null) {
+            Long scopeUserId = findUserByName(scopePersonName);
+            if (scopeUserId != null) {
+                // Get all people who report to this person (recursively)
+                scopeUserIds = new java.util.ArrayList<>();
+                collectOrgSubtree(scopeUserId, scopeUserIds, 0);
+                scopeLabel = scopePersonName + "'s org";
+            }
+        }
+
+        // Search users by the query
+        var allMatches = userRepository.searchByUsernameOrDisplayName(query);
+        // If no results, try individual words
+        if (allMatches.isEmpty()) {
+            for (String word : query.split("\\s+")) {
+                if (word.length() >= 3) {
+                    allMatches.addAll(userRepository.searchByUsernameOrDisplayName(word));
+                }
+            }
+        }
+
+        // Filter to scope if specified
+        final List<Long> finalScope = scopeUserIds;
+        var filtered = allMatches.stream()
+                .filter(u -> !u.isBot())
+                .filter(u -> finalScope == null || finalScope.contains(u.getId()))
+                .distinct()
+                .limit(15)
+                .toList();
+
+        if (filtered.isEmpty()) return "No people found matching \"" + query + "\" in " + scopeLabel;
+
+        StringBuilder sb = new StringBuilder("People matching \"" + query + "\" in " + scopeLabel + ":\n");
+        for (var u : filtered) {
+            sb.append("- ").append(u.getDisplayName());
+            if (u.getJobTitle() != null) sb.append(" — ").append(u.getJobTitle());
+            if (u.getDepartment() != null) sb.append(", ").append(u.getDepartment());
+            if (u.getLocation() != null) sb.append(" [").append(u.getLocation()).append("]");
+            if (u.getSkills() != null) sb.append(" skills: ").append(truncate(u.getSkills(), 80));
+            sb.append("\n");
+            // Add their org assignment
+            var assignments = orgAssignmentRepository.findByUserId(u.getId());
+            for (var a : assignments) {
+                var orgUnit = orgUnitRepository.findById(a.getOrgUnitId());
+                sb.append("    ↳ ").append(a.getTitle()).append(" in ")
+                  .append(orgUnit.map(ou -> ou.getName()).orElse("?"))
+                  .append(" (").append(a.getLevel()).append(")\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Get the full org tree structure summary.
+     */
+    public String getOrgOverview() {
+        var roots = orgUnitRepository.findByParentIdIsNull();
+        if (roots.isEmpty()) return "No organizational structure defined.";
+
+        StringBuilder sb = new StringBuilder("Organization structure:\n");
+        for (var root : roots) {
+            appendOrgTree(sb, root, 0);
+        }
+        return sb.toString();
+    }
+
+    private void appendOrgTree(StringBuilder sb, com.social.app.persistence.entity.OrgUnitEntity unit, int depth) {
+        String indent = "  ".repeat(depth);
+        long memberCount = orgAssignmentRepository.findByOrgUnitId(unit.getId()).size();
+        sb.append(indent).append("- ").append(unit.getName()).append(" (").append(unit.getType()).append(")");
+        if (memberCount > 0) sb.append(" — ").append(memberCount).append(" people");
+        if (unit.getHeadUserId() != null) {
+            userRepository.findById(unit.getHeadUserId())
+                    .ifPresent(u -> sb.append(", led by ").append(u.getDisplayName()));
+        }
+        sb.append("\n");
+
+        var children = orgUnitRepository.findByParentId(unit.getId());
+        for (var child : children) {
+            appendOrgTree(sb, child, depth + 1);
+        }
+    }
+
+    private void collectOrgSubtree(long userId, List<Long> collected, int depth) {
+        if (depth > 10 || collected.size() > 200) return; // safety
+        collected.add(userId);
+        var reports = orgAssignmentRepository.findByReportsToUserId(userId);
+        for (var r : reports) {
+            if (!collected.contains(r.getUserId())) {
+                collectOrgSubtree(r.getUserId(), collected, depth + 1);
+            }
+        }
     }
 
     private String truncate(String text, int maxLen) {
