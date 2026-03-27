@@ -125,12 +125,12 @@ export default function UserProfile({ userId }: Props) {
         </div>
 
         {/* Profile info - below cover */}
-        <div className="px-4 pt-2 flex items-start gap-4">
+        <div className="px-4 pt-2 flex items-start gap-4 bg-white">
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{user.displayName}</h1>
               {user.pronouns && (
-                <span className="text-xs text-gray-400">({user.pronouns})</span>
+                <span className="text-xs text-gray-500">({user.pronouns})</span>
               )}
             </div>
             <p className="text-sm text-gray-500">@{user.username}</p>

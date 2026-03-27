@@ -177,7 +177,7 @@ export default function Header() {
       {/* Messages icon */}
       <Link
         to="/messages"
-        className="relative p-2 text-gray-500 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-colors"
+        className="relative p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -202,7 +202,7 @@ export default function Header() {
               {(currentUser?.displayName ?? username)?.[0]?.toUpperCase() ?? '?'}
             </div>
           )}
-          <span className="hidden sm:inline text-sm font-medium text-gray-700">
+          <span className="hidden sm:inline text-sm font-semibold text-white">
             {currentUser?.displayName ?? username}
           </span>
           {debugMode && (
@@ -318,7 +318,7 @@ function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={handleOpen}
-        className="relative p-2 text-gray-500 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-colors"
+        className="relative p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
