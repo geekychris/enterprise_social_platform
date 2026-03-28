@@ -7,31 +7,17 @@ struct NotificationsView: View {
     var body: some View {
         List {
             ForEach(notifications) { notif in
-                HStack(spacing: 12) {
-                    AvatarView(url: notif.actorAvatarUrl, name: notif.actorName ?? "?", size: 36)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(notif.message ?? notificationText(notif))
-                            .font(.subheadline)
-                            .fontWeight(notif.read ? .regular : .semibold)
-                        Text(RelativeTime.format(notif.createdAt))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if !notif.read {
-                        Circle()
-                            .fill(.blue)
-                            .frame(width: 8, height: 8)
-                    }
-                }
-                .padding(.vertical, 4)
+                notificationRow(notif)
             }
         }
         .listStyle(.plain)
         .navigationTitle("Notifications")
+        .navigationDestination(for: Int64.self) { postId in
+            PostDetailView(postId: postId)
+        }
+        .navigationDestination(for: ProfileNavigation.self) { nav in
+            ProfileView(userId: nav.userId)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Mark All Read") { markAllRead() }
@@ -45,6 +31,44 @@ struct NotificationsView: View {
         }
         .refreshable { await load() }
         .task { await load() }
+    }
+
+    @ViewBuilder
+    private func notificationRow(_ notif: NotificationDto) -> some View {
+        let content = HStack(spacing: 12) {
+            AvatarView(url: notif.actorAvatarUrl, name: notif.actorName ?? "?", size: 36)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(notif.message ?? notificationText(notif))
+                    .font(.subheadline)
+                    .fontWeight(notif.read ? .regular : .semibold)
+                Text(RelativeTime.format(notif.createdAt))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !notif.read {
+                Circle().fill(.blue).frame(width: 8, height: 8)
+            }
+        }
+        .padding(.vertical, 4)
+
+        // Navigate based on notification type
+        switch notif.type {
+        case "MENTION", "COMMENT", "REACTION":
+            if let postId = notif.postId ?? notif.targetId {
+                NavigationLink(value: postId) { content }
+            } else {
+                content
+            }
+        case "FRIEND_REQUEST", "FRIEND_ACCEPTED":
+            if let actorId = notif.actorId {
+                NavigationLink(value: ProfileNavigation(userId: actorId)) { content }
+            } else {
+                content
+            }
+        default:
+            content
+        }
     }
 
     private func notificationText(_ notif: NotificationDto) -> String {

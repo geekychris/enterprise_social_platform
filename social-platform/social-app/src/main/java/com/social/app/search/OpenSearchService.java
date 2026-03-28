@@ -92,7 +92,10 @@ public class OpenSearchService {
     }
 
     public SearchResultDto search(String query, String type) {
-        if (openSearchAvailable) {
+        // OpenSearch only indexes users and pages — for other types, go straight to DB
+        boolean canUseOpenSearch = openSearchAvailable &&
+                (type == null || "user".equalsIgnoreCase(type) || "page".equalsIgnoreCase(type));
+        if (canUseOpenSearch) {
             return searchOpenSearch(query, type);
         }
         return searchDatabase(query, type);

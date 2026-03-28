@@ -51,6 +51,11 @@ struct PhoneTabView: View {
             .tabItem { Label("Browse", systemImage: "square.grid.2x2") }
 
             NavigationStack {
+                OrgView()
+            }
+            .tabItem { Label("Org", systemImage: "building.2") }
+
+            NavigationStack {
                 ConversationsView()
             }
             .tabItem { Label("Messages", systemImage: "bubble.left.fill") }
@@ -87,6 +92,7 @@ enum iPadSection: String, CaseIterable, Identifiable {
     case feed = "Feed"
     case search = "Search"
     case messages = "Messages"
+    case org = "Org"
     case groups = "Groups"
     case pages = "Pages"
     case friends = "Friends"
@@ -100,6 +106,7 @@ enum iPadSection: String, CaseIterable, Identifiable {
         case .feed: return "house.fill"
         case .search: return "magnifyingglass"
         case .messages: return "bubble.left.fill"
+        case .org: return "building.2"
         case .groups: return "person.3.fill"
         case .pages: return "doc.richtext.fill"
         case .friends: return "person.2.fill"
@@ -156,6 +163,8 @@ struct iPadSplitView: View {
             NavigationStack { SearchView().withGlobalNavDestinations() }
         case .messages:
             NavigationStack { ConversationsView().withGlobalNavDestinations() }
+        case .org:
+            NavigationStack { OrgView().withGlobalNavDestinations() }
         case .groups:
             NavigationStack { iPadGroupsView().withGlobalNavDestinations() }
         case .pages:

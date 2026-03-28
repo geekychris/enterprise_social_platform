@@ -10,6 +10,11 @@ struct ProfileView: View {
     @State private var friendRequestId: Int64?
     @State private var showEdit = false
     @State private var loading = true
+    @State private var orgAssignments: [OrgAssignmentDto] = []
+    @State private var orgChain: [OrgChainDto] = []
+    @State private var orgReports: [OrgReportDto] = []
+    @State private var orgExpanded = false
+    @State private var orgLoaded = false
 
     private var isOwnProfile: Bool { userId == auth.userId }
 
@@ -99,6 +104,11 @@ struct ProfileView: View {
 
                         // Details
                         profileDetails(user)
+
+                        // Organization
+                        if !orgAssignments.isEmpty {
+                            orgSection
+                        }
                     }
                     .padding()
 
@@ -143,6 +153,87 @@ struct ProfileView: View {
             if let tz = user.timezone { detailRow("clock", tz) }
         }
         .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var orgSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DisclosureGroup(isExpanded: $orgExpanded) {
+                if !orgLoaded {
+                    ProgressView()
+                        .padding(.vertical, 8)
+                        .task { await loadOrgDetails() }
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Reporting chain (reversed so CEO at top)
+                        ForEach(Array(orgChain.reversed().enumerated()), id: \.element.id) { index, person in
+                            NavigationLink(value: ProfileNavigation(userId: person.userId)) {
+                                HStack(spacing: 6) {
+                                    AvatarView(url: person.userAvatarUrl, name: person.userName ?? "?", size: 24)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(person.userName ?? "Unknown")
+                                            .font(.caption)
+                                            .fontWeight(person.userId == userId ? .bold : .regular)
+                                        if let role = person.roleName {
+                                            Text(role).font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                                .padding(.leading, CGFloat(index) * 12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // Current user marker if not in chain
+                        let chainUserIds = Set(orgChain.map(\.userId))
+                        if !chainUserIds.contains(userId), let assignment = orgAssignments.first {
+                            HStack(spacing: 6) {
+                                AvatarView(url: assignment.userAvatarUrl, name: assignment.userName ?? "?", size: 24)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(assignment.userName ?? "Unknown")
+                                        .font(.caption.bold())
+                                    if let role = assignment.roleName {
+                                        Text(role).font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.leading, CGFloat(orgChain.count) * 12)
+                        }
+
+                        // Direct reports
+                        if !orgReports.isEmpty {
+                            let indent = CGFloat(orgChain.count + 1) * 12
+                            ForEach(orgReports) { report in
+                                NavigationLink(value: ProfileNavigation(userId: report.userId)) {
+                                    HStack(spacing: 6) {
+                                        AvatarView(url: report.userAvatarUrl, name: report.userName ?? "?", size: 22)
+                                        VStack(alignment: .leading, spacing: 0) {
+                                            Text(report.userName ?? "Unknown").font(.caption)
+                                            if let role = report.roleName {
+                                                Text(role).font(.caption2).foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+                                    .padding(.leading, indent)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            } label: {
+                Label("Organization", systemImage: "building.2")
+                    .font(.subheadline.bold())
+            }
+        }
+        .padding(.top, 12)
+    }
+
+    private func loadOrgDetails() async {
+        orgChain = (try? await APIClient.shared.get("/org/assignments/chain/\(userId)")) ?? []
+        orgReports = (try? await APIClient.shared.get("/org/assignments/reports/\(userId)")) ?? []
+        orgLoaded = true
     }
 
     private func detailRow(_ icon: String, _ text: String) -> some View {
@@ -201,6 +292,7 @@ struct ProfileView: View {
             user = try await APIClient.shared.get("/users/\(userId)")
             let feedResp: FeedResponse = try await APIClient.shared.get("/feed?limit=20")
             posts = feedResp.posts.filter { $0.author.id == userId }
+            orgAssignments = (try? await APIClient.shared.get("/org/assignments/user/\(userId)")) ?? []
             if !isOwnProfile {
                 let following: [UserSummaryDto] = try await APIClient.shared.get("/users/\(auth.userId ?? 0)/following")
                 isFollowing = following.contains { $0.id == userId }

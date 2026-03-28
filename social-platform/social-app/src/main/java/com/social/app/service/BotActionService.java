@@ -1,7 +1,7 @@
 package com.social.app.service;
 
-import com.social.app.persistence.entity.ConversationEntity;
 import com.social.app.persistence.entity.PostEntity;
+import com.social.app.persistence.repository.MembershipRepository;
 import com.social.app.persistence.repository.PostRepository;
 import com.social.core.id.GlobalIdGenerator;
 import com.social.core.id.ObjectType;
@@ -19,6 +19,7 @@ public class BotActionService {
     private final ConversationService conversationService;
     private final MessageService messageService;
     private final GroupService groupService;
+    private final MembershipRepository membershipRepository;
     private final GlobalIdGenerator idGenerator;
 
     public BotActionService(PostRepository postRepository,
@@ -26,17 +27,24 @@ public class BotActionService {
                             ConversationService conversationService,
                             MessageService messageService,
                             GroupService groupService,
+                            MembershipRepository membershipRepository,
                             GlobalIdGenerator idGenerator) {
         this.postRepository = postRepository;
         this.pollService = pollService;
         this.conversationService = conversationService;
         this.messageService = messageService;
         this.groupService = groupService;
+        this.membershipRepository = membershipRepository;
         this.idGenerator = idGenerator;
     }
 
     @Transactional
     public PostEntity createPost(long userId, String content, String targetType, Long targetId) {
+        // Verify membership for group/page posts
+        if ("GROUP_FEED".equals(targetType) && targetId != null) {
+            verifyGroupMembership(userId, targetId);
+        }
+
         PostEntity post = new PostEntity();
         post.setId(idGenerator.next(ObjectType.POST).value());
         post.setAuthorId(userId);
@@ -50,6 +58,11 @@ public class BotActionService {
     @Transactional
     public PostEntity createPollPost(long userId, String question, List<String> options,
                                      String targetType, Long targetId) {
+        // Verify membership for group/page posts
+        if ("GROUP_FEED".equals(targetType) && targetId != null) {
+            verifyGroupMembership(userId, targetId);
+        }
+
         PostEntity post = new PostEntity();
         post.setId(idGenerator.next(ObjectType.POST).value());
         post.setAuthorId(userId);
@@ -66,12 +79,19 @@ public class BotActionService {
 
     @Transactional
     public void sendMessage(long userId, long recipientUserId, String content) {
-        ConversationEntity conversation = conversationService.getOrCreateDirect(userId, recipientUserId);
+        var conversation = conversationService.getOrCreateDirect(userId, recipientUserId);
         messageService.send(userId, conversation.getId(), content, null);
     }
 
     @Transactional
     public void joinGroup(long userId, long groupId) {
         groupService.join(userId, groupId);
+    }
+
+    private void verifyGroupMembership(long userId, long groupId) {
+        var membership = membershipRepository.findByUserIdAndGroupId(userId, groupId);
+        if (membership.isEmpty() || !"APPROVED".equals(membership.get().getStatus())) {
+            throw new IllegalArgumentException("You are not a member of this group. Join the group first.");
+        }
     }
 }

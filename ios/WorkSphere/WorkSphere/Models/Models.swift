@@ -64,6 +64,45 @@ struct UserSummaryDto: Codable, Identifiable {
     let avatarUrl: String?
 }
 
+struct PageFollowerDto: Codable, Identifiable {
+    let id: Int64
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+}
+
+// MARK: - Org
+
+struct OrgAssignmentDto: Codable, Identifiable {
+    let id: Int64
+    let userId: Int64
+    let nodeId: Int64
+    let roleName: String?
+    let userName: String?
+    let userAvatarUrl: String?
+    let nodeName: String?
+    let parentNodeId: Int64?
+}
+
+struct OrgChainDto: Codable, Identifiable {
+    let id: Int64
+    let userId: Int64
+    let userName: String?
+    let userAvatarUrl: String?
+    let roleName: String?
+    let nodeName: String?
+    let depth: Int?
+}
+
+struct OrgReportDto: Codable, Identifiable {
+    let id: Int64
+    let userId: Int64
+    let userName: String?
+    let userAvatarUrl: String?
+    let roleName: String?
+    let nodeName: String?
+}
+
 // MARK: - Post
 
 struct PostDto: Codable, Identifiable {
@@ -80,6 +119,24 @@ struct PostDto: Codable, Identifiable {
     let createdAt: String
     let recommended: Bool?
     let recommendationScore: Double?
+    let poll: PollDto?
+}
+
+struct PollDto: Codable, Identifiable {
+    let id: Int64
+    let question: String
+    let allowMultiple: Bool
+    let closesAt: String?
+    let closed: Bool
+    let options: [PollOptionDto]
+    let totalVotes: Int
+    let currentUserVotes: [Int64]?
+}
+
+struct PollOptionDto: Codable, Identifiable {
+    let id: Int64
+    let label: String
+    let voteCount: Int
 }
 
 struct FeedResponse: Codable {

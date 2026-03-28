@@ -27,16 +27,20 @@
 		B5DD3FC6ADAEA6903A0AB6ED /* MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = B130C5BDC1EAA49C72AE1579 /* MarkdownText.swift */; };
 		C2C10536A8D9C324AF705095 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13642C64F80F7F4D99D29688 /* SearchView.swift */; };
 		C4CA3B6810E0A23FACB3A30B /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4478AA54E37974B7D77639A8 /* LoginView.swift */; };
+		DCAE4869071D0CA01C3E916C /* OrgView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B2733D03EEF48266733B32 /* OrgView.swift */; };
 		E6EB1486B9CDB3F69722E232 /* WorkSphereApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000CA0942456120C6F5D84B5 /* WorkSphereApp.swift */; };
 		EF8059A97A1AB50CB915C0F8 /* PostCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CA744957933315CE1C8A7C /* PostCard.swift */; };
 		F498E2AA8942BB1CD0448AA9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F236EE27A9885B85DF454B /* ContentView.swift */; };
 		FB81B770A0118B965E8A588B /* MessageThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8DD9682111E6E8D4EC4EDAF /* MessageThreadView.swift */; };
+		FCD58276A3267D8E2B4C12BA /* PollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CA06A228C04433035F8485A /* PollView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		000CA0942456120C6F5D84B5 /* WorkSphereApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSphereApp.swift; sourceTree = "<group>"; };
 		0C0EB1163CE5D04AC2D6DE29 /* PageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageView.swift; sourceTree = "<group>"; };
 		13642C64F80F7F4D99D29688 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		1CA06A228C04433035F8485A /* PollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollView.swift; sourceTree = "<group>"; };
+		21B2733D03EEF48266733B32 /* OrgView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrgView.swift; sourceTree = "<group>"; };
 		23CA744957933315CE1C8A7C /* PostCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostCard.swift; sourceTree = "<group>"; };
 		285B3F8F10C38461DD281863 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		3A6E97C1D224C034CC889A30 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
@@ -107,6 +111,7 @@
 			isa = PBXGroup;
 			children = (
 				B27806DA7F5B3C1A32CB8D07 /* FeedView.swift */,
+				1CA06A228C04433035F8485A /* PollView.swift */,
 				23CA744957933315CE1C8A7C /* PostCard.swift */,
 				7ACC669B26227F087C47C4CF /* PostDetailView.swift */,
 			);
@@ -130,6 +135,14 @@
 				ED21EB4FA9F6951F94011ED3 /* WorkSphere */,
 				11E65529C861A9C452E5FBF8 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		538CC5C19918FD3AE50E0FFD /* Org */ = {
+			isa = PBXGroup;
+			children = (
+				21B2733D03EEF48266733B32 /* OrgView.swift */,
+			);
+			path = Org;
 			sourceTree = "<group>";
 		};
 		86C0ED76F7E474D8C81E0C69 /* Pages */ = {
@@ -159,6 +172,7 @@
 				86D2D5B1ED882EF7F8C4F779 /* Groups */,
 				98A0EF53A0C2062FF8A32871 /* Messages */,
 				94CCFBB115CF73344A2981C6 /* Notifications */,
+				538CC5C19918FD3AE50E0FFD /* Org */,
 				86C0ED76F7E474D8C81E0C69 /* Pages */,
 				18859A7FB3119CD7F555004F /* Profile */,
 				17C00414A1CE61FD03C581CA /* Search */,
@@ -304,7 +318,9 @@
 				FB81B770A0118B965E8A588B /* MessageThreadView.swift in Sources */,
 				B20C93702831F8BB3C065D27 /* Models.swift in Sources */,
 				9E05FEC80071205EF6F232FE /* NotificationsView.swift in Sources */,
+				DCAE4869071D0CA01C3E916C /* OrgView.swift in Sources */,
 				1CE09CAEAC15F551071AA1DC /* PageView.swift in Sources */,
+				FCD58276A3267D8E2B4C12BA /* PollView.swift in Sources */,
 				EF8059A97A1AB50CB915C0F8 /* PostCard.swift in Sources */,
 				37EE09DD5A5CDBBD8DDD17FB /* PostDetailView.swift in Sources */,
 				7800935FE7E2D6768FE51DF4 /* ProfileView.swift in Sources */,

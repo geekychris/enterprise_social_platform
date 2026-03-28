@@ -50,6 +50,7 @@ struct PostDetailView: View {
 
             TextField("Write a comment...", text: $commentText)
                 .textFieldStyle(.roundedBorder)
+                .onSubmit { submitComment() }
 
             Button(action: submitComment) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -147,6 +148,7 @@ struct CommentView: View {
                 TextField("Write a reply...", text: $replyText)
                     .textFieldStyle(.roundedBorder)
                     .font(.caption)
+                    .onSubmit { submitReply() }
                 Button(action: submitReply) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.body)

@@ -6,8 +6,30 @@ struct ConversationsView: View {
     @State private var loading = true
     @State private var showNewConversation = false
 
+    @State private var navigateToBotConvId: Int64?
+    @State private var loadingBot = false
+
     var body: some View {
         List {
+            // Chat with Roid button
+            Button {
+                startBotChat()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.purple)
+                    Text("Chat with Roid")
+                        .font(.caption.bold())
+                        .foregroundStyle(.purple)
+                    Spacer()
+                    if loadingBot {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .listRowBackground(Color.purple.opacity(0.08))
+
             ForEach(conversations) { conv in
                 NavigationLink(value: ConversationNav(conversationId: conv.id)) {
                     ConversationRow(conversation: conv, currentUserId: auth.userId ?? 0)
@@ -32,6 +54,14 @@ struct ConversationsView: View {
                 // Navigate handled by parent
             }
         }
+        .navigationDestination(isPresented: Binding(
+            get: { navigateToBotConvId != nil },
+            set: { if !$0 { navigateToBotConvId = nil } }
+        )) {
+            if let convId = navigateToBotConvId {
+                MessageThreadView(conversationId: convId)
+            }
+        }
         .overlay {
             if conversations.isEmpty && !loading {
                 ContentUnavailableView("No conversations", systemImage: "bubble.left.and.bubble.right", description: Text("Start a conversation"))
@@ -53,6 +83,20 @@ struct ConversationsView: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(10))
             await load()
+        }
+    }
+
+    private func startBotChat() {
+        guard !loadingBot else { return }
+        loadingBot = true
+        Task {
+            do {
+                struct BotInfo: Codable { let id: Int64; let username: String; let displayName: String }
+                let bot: BotInfo = try await APIClient.shared.get("/ai/bot/info")
+                let conv: ConversationDto = try await APIClient.shared.post("/conversations/direct/\(bot.id)")
+                navigateToBotConvId = conv.id
+            } catch {}
+            loadingBot = false
         }
     }
 }

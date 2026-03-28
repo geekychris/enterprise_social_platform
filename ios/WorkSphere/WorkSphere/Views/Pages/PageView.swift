@@ -9,6 +9,7 @@ struct PageView: View {
     @State private var isFollowing = false
     @State private var showEdit = false
     @State private var showCreatePost = false
+    @State private var followers: [PageFollowerDto] = []
 
     private var isOwner: Bool { page?.ownerId == auth.userId }
 
@@ -36,6 +37,23 @@ struct PageView: View {
                         Label("\(page.followerCount ?? 0) followers", systemImage: "person.2")
                     }
                     .font(.caption).foregroundStyle(.secondary)
+
+                    // Follower avatar strip
+                    if !followers.isEmpty {
+                        HStack(spacing: -6) {
+                            ForEach(followers.prefix(8), id: \.id) { f in
+                                NavigationLink(value: ProfileNavigation(userId: f.id)) {
+                                    AvatarView(url: f.avatarUrl, name: f.displayName, size: 28)
+                                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                                }
+                            }
+                            if followers.count > 8 {
+                                Text("+\(followers.count - 8)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
 
                     if isOwner {
                         Button("Edit Page") { showEdit = true }.buttonStyle(.bordered)
@@ -85,6 +103,7 @@ struct PageView: View {
         do {
             page = try await APIClient.shared.get("/pages/\(pageId)")
             posts = (try? await APIClient.shared.get("/pages/\(pageId)/posts")) ?? []
+            followers = (try? await APIClient.shared.get("/pages/\(pageId)/followers")) ?? []
             if !isOwner {
                 let following: Bool = (try? await APIClient.shared.get("/pages/\(pageId)/following")) ?? false
                 isFollowing = following

@@ -9,6 +9,10 @@ struct MessageThreadView: View {
     @State private var messageText = ""
     @State private var sending = false
     @State private var showInfo = false
+    @State private var showSummary = false
+    @State private var summaryText = ""
+    @State private var summaryLoading = false
+    @State private var summaryError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,6 +20,44 @@ struct MessageThreadView: View {
             AiAssistantView(context: "conversation", contextId: conversationId)
                 .padding(.horizontal)
                 .padding(.top, 4)
+
+            // Summary panel
+            if showSummary {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Summary", systemImage: "doc.text")
+                            .font(.caption.bold())
+                            .foregroundStyle(.purple)
+                        Spacer()
+                        Button { withAnimation { showSummary = false; summaryText = ""; summaryError = nil } } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if summaryLoading && summaryText.isEmpty {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(.purple)
+                            Text("Summarizing...").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if !summaryText.isEmpty {
+                        ScrollView {
+                            MarkdownText(content: summaryText, font: .caption)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                    if let summaryError {
+                        Text(summaryError).font(.caption).foregroundStyle(.red)
+                    }
+                }
+                .padding()
+                .background(.purple.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.purple.opacity(0.15)))
+                .padding(.horizontal)
+            }
 
             // Messages
             ScrollViewReader { proxy in
@@ -45,6 +87,7 @@ struct MessageThreadView: View {
 
                 TextField("Type a message...", text: $messageText)
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit { sendMessage() }
 
                 Button {
                     sendMessage()
@@ -65,8 +108,13 @@ struct MessageThreadView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showInfo.toggle() } label: {
-                    Image(systemName: "person.2")
+                HStack(spacing: 12) {
+                    Button { summarizeConversation() } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
+                    Button { showInfo.toggle() } label: {
+                        Image(systemName: "person.2")
+                    }
                 }
             }
         }
@@ -117,6 +165,24 @@ struct MessageThreadView: View {
         Task { try? await APIClient.shared.postVoid("/conversations/\(conversationId)/read") }
     }
 
+    private func summarizeConversation() {
+        withAnimation { showSummary = true }
+        summaryText = ""
+        summaryLoading = true
+        summaryError = nil
+        Task {
+            do {
+                struct SummarizeRequest: Codable { let conversationId: Int64 }
+                try await APIClient.shared.streamAI(context: "conversation", contextId: conversationId, question: "Summarize this conversation") { token in
+                    summaryText += token
+                }
+            } catch {
+                summaryError = error.localizedDescription
+            }
+            summaryLoading = false
+        }
+    }
+
     private func sendMessage() {
         let text = messageText
         messageText = ""
@@ -150,7 +216,7 @@ struct MessageBubble: View {
                     if !isSent {
                         AvatarView(url: message.sender.avatarUrl, name: message.sender.displayName, size: 24)
                     }
-                    Text(message.content ?? "")
+                    Text(LocalizedStringKey(message.content ?? ""))
                         .font(.caption)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)

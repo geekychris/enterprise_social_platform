@@ -75,6 +75,11 @@ struct PostCard: View {
                 }
             }
 
+            // Poll
+            if let poll = post.poll {
+                PollView(poll: poll, postId: post.id)
+            }
+
             // Reactions + comments
             HStack(spacing: 8) {
                 ReactionButton(

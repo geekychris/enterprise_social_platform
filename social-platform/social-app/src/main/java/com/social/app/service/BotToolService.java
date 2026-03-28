@@ -206,6 +206,22 @@ public class BotToolService {
     }
 
     /**
+     * List pages the user owns.
+     */
+    public String getUserPages(long userId) {
+        var pages = pageRepository.findAll().stream()
+                .filter(p -> p.getOwnerId() != null && p.getOwnerId().equals(userId))
+                .toList();
+        if (pages.isEmpty()) return "No pages owned.";
+
+        StringBuilder sb = new StringBuilder("Your pages:\n");
+        for (var p : pages) {
+            sb.append("- ").append(p.getName()).append(" (ID: ").append(p.getId()).append(")\n");
+        }
+        return sb.toString();
+    }
+
+    /**
      * Find a group by name (fuzzy match) among the user's groups.
      * Returns group ID or null.
      */

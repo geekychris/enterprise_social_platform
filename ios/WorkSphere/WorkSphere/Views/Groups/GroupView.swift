@@ -107,6 +107,23 @@ struct GroupView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
+            // Member avatar strip
+            if !members.isEmpty {
+                HStack(spacing: -6) {
+                    ForEach(members.prefix(8), id: \.userId) { m in
+                        NavigationLink(value: ProfileNavigation(userId: m.userId)) {
+                            AvatarView(url: m.userAvatarUrl, name: m.userName ?? "?", size: 28)
+                                .overlay(Circle().stroke(.white, lineWidth: 2))
+                        }
+                    }
+                    if members.count > 8 {
+                        Text("+\(members.count - 8)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             // Join/Leave
             if !isOwnerOrAdmin {
                 if isMember {

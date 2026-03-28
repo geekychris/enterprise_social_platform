@@ -188,29 +188,26 @@ public class BotService {
                 switch (action) {
                     case "CREATE_POST" -> {
                         String content = paramMap.getOrDefault("content", "");
-                        // If content is empty/short/placeholder, use the text before the action tag
                         if (content.length() < 10 || content.equals("...") || content.startsWith("...")) {
                             content = extractPostContent(textBefore);
                         }
-                        String targetType = paramMap.get("targetType");
-                        if (targetType == null) targetType = "GROUP_FEED";
-                        Long targetId = resolveTargetId(paramMap.get("targetId"), targetType, senderId);
-                        if (targetId != null && !content.isBlank()) {
-                            actionService.createPost(senderId, content, targetType, targetId);
-                            log.info("Bot executed CREATE_POST ({} chars) for user {} in {}", content.length(), senderId, targetId);
+                        String targetName = paramMap.get("targetId");
+                        var resolved = resolveTargetWithType(targetName, senderId);
+                        if (resolved != null && !content.isBlank()) {
+                            actionService.createPost(senderId, content, resolved[0], Long.parseLong(resolved[1]));
+                            log.info("Bot executed CREATE_POST ({} chars) for user {} in {} ({})", content.length(), senderId, resolved[1], resolved[0]);
                         } else {
-                            log.warn("CREATE_POST skipped: targetId={}, content length={}", targetId, content.length());
+                            log.warn("CREATE_POST skipped: target={}, content length={}", targetName, content.length());
                         }
                     }
                     case "CREATE_POLL" -> {
                         String question = paramMap.getOrDefault("question", "");
                         List<String> options = List.of(paramMap.getOrDefault("options", "").split(","));
-                        String targetType = paramMap.get("targetType");
-                        if (targetType == null) targetType = "GROUP_FEED";
-                        Long targetId = resolveTargetId(paramMap.get("targetId"), targetType, senderId);
-                        if (targetId != null) {
-                            actionService.createPollPost(senderId, question, options, targetType, targetId);
-                            log.info("Bot executed CREATE_POLL for user {} in {}", senderId, targetId);
+                        String targetName = paramMap.get("targetId");
+                        var resolved = resolveTargetWithType(targetName, senderId);
+                        if (resolved != null) {
+                            actionService.createPollPost(senderId, question, options, resolved[0], Long.parseLong(resolved[1]));
+                            log.info("Bot executed CREATE_POLL for user {} in {} ({})", senderId, resolved[1], resolved[0]);
                         }
                     }
                     case "SEND_MESSAGE" -> {
@@ -318,6 +315,31 @@ public class BotService {
     }
 
     /**
+     * Resolve target name to [targetType, targetId] — auto-detects if it's a group or page.
+     * Returns null if not found.
+     */
+    private String[] resolveTargetWithType(String raw, long userId) {
+        if (raw == null || raw.isBlank()) return null;
+
+        try { return new String[]{"GROUP_FEED", String.valueOf(Long.parseLong(raw.trim()))}; }
+        catch (NumberFormatException ignored) {}
+
+        String name = raw.trim();
+        try { name = java.net.URLDecoder.decode(name, "UTF-8"); } catch (Exception ignored) {}
+
+        // Try group
+        Long id = toolService.findGroupByName(name, userId);
+        if (id == null) id = toolService.findGroupByNameInMessage(name.toLowerCase(), userId);
+        if (id != null) return new String[]{"GROUP_FEED", String.valueOf(id)};
+
+        // Try page
+        id = toolService.findPageByName(name);
+        if (id != null) return new String[]{"PAGE_FEED", String.valueOf(id)};
+
+        return null;
+    }
+
+    /**
      * Resolve a targetId that may be a numeric ID or a group/page name.
      */
     private Long resolveTargetId(String raw, String targetType, long userId) {
@@ -328,21 +350,17 @@ public class BotService {
             return Long.parseLong(raw.trim());
         } catch (NumberFormatException ignored) {}
 
-        // It's a name — resolve it
+        // It's a name — resolve it. Try both groups and pages regardless of targetType
         String name = raw.trim();
-        if ("GROUP_FEED".equals(targetType)) {
-            Long id = toolService.findGroupByName(name, userId);
-            if (id == null) id = toolService.findGroupByNameInMessage(name.toLowerCase(), userId);
-            if (id != null) return id;
-        }
-        if ("PAGE_FEED".equals(targetType)) {
-            Long id = toolService.findPageByName(name);
-            if (id != null) return id;
-        }
+        try { name = java.net.URLDecoder.decode(name, "UTF-8"); } catch (Exception ignored) {}
 
-        // Last resort: try as group name regardless of targetType
+        // Try as group first
         Long id = toolService.findGroupByName(name, userId);
         if (id == null) id = toolService.findGroupByNameInMessage(name.toLowerCase(), userId);
+        if (id != null) return id;
+
+        // Try as page
+        id = toolService.findPageByName(name);
         return id;
     }
 
@@ -438,16 +456,21 @@ public class BotService {
                 "Group related items together, highlight what matters most, and provide insight. " +
                 "Be concise, friendly, and helpful. Cite authors when relevant. " +
                 "Format your responses with markdown when appropriate.\n\n" +
-                "ACTION CAPABILITIES: You can perform actions for the user. Include these EXACT tags in your response:\n" +
-                "  [ACTION:CREATE_POST|content=...|targetType=GROUP_FEED|targetId=<group name or ID>] - Post to a group\n" +
-                "  [ACTION:CREATE_POLL|question=...|options=Option A,Option B,Option C|targetType=GROUP_FEED|targetId=<group name or ID>] - Create a poll\n" +
-                "  [ACTION:SEND_MESSAGE|recipientId=...|content=...] - Send a DM to someone\n" +
-                "  [ACTION:JOIN_GROUP|groupId=...] - Join a group\n" +
-                "  [REMEMBER|key=...|value=...] - Remember something for the user\n" +
-                "For targetId you can use the group/page name (e.g. targetId=remote workers) and it will be resolved.\n" +
-                "For recipientId you can use the person's name (e.g. recipientId=Jeramy Osinski) and it will be resolved.\n" +
-                "IMPORTANT: When the user asks you to send a message, create a post, or take any action, DO IT IMMEDIATELY. " +
-                "Include the action tag in your response. Do NOT ask for confirmation — just execute and confirm what you did.\n\n" +
+                "ACTION CAPABILITIES: You MUST include these EXACT tags to perform actions:\n" +
+                "  [ACTION:CREATE_POST|content=...|targetType=GROUP_FEED|targetId=<group name>]\n" +
+                "  [ACTION:CREATE_POLL|question=...|options=Option A,Option B,Option C|targetType=GROUP_FEED|targetId=<group name>]\n" +
+                "  [ACTION:SEND_MESSAGE|recipientId=<person name>|content=...]\n" +
+                "  [ACTION:JOIN_GROUP|groupId=<group name>]\n" +
+                "  [REMEMBER|key=...|value=...]\n\n" +
+                "EXAMPLE: If the user says 'create a poll in remote workers about lunch options monday or tuesday', respond:\n" +
+                "I'll create that poll for you! [ACTION:CREATE_POLL|question=What day should we have lunch?|options=Monday,Tuesday|targetType=GROUP_FEED|targetId=remote workers]\n\n" +
+                "EXAMPLE: If the user says 'post hello world in engineering group', respond:\n" +
+                "Done! [ACTION:CREATE_POST|content=hello world|targetType=GROUP_FEED|targetId=engineering]\n\n" +
+                "EXAMPLE: If the user says 'create a poll on my page about colors', respond:\n" +
+                "Done! [ACTION:CREATE_POLL|question=What's your favorite color?|options=Red,Blue,Green|targetType=PAGE_FEED|targetId=my page]\n\n" +
+                "CRITICAL: You can ONLY post to groups the user is a member of. If the user is not a member, tell them to join first.\n" +
+                "CRITICAL: When the user asks to create, post, send, or do anything, you MUST include the action tag. " +
+                "Do NOT just describe what you would do — actually include the [ACTION:...] tag so it gets executed.\n\n" +
                 "MEMORY: If the user asks you to remember something, use [REMEMBER|key=...|value=...]. " +
                 "Their memories are provided in the context below.";
     }
@@ -463,6 +486,16 @@ public class BotService {
             StringBuilder memSb = new StringBuilder("=== User's saved memories ===\n");
             memories.forEach((k, v) -> memSb.append(k).append(": ").append(v).append("\n"));
             contextParts.add(memSb.toString());
+        }
+
+        // Always include user's group and page memberships so LLM knows what they can access
+        String userGroups = toolService.getUserGroups(senderId);
+        if (!userGroups.contains("not a member")) {
+            contextParts.add("=== Your groups ===\n" + userGroups);
+        }
+        String userPages = toolService.getUserPages(senderId);
+        if (!userPages.contains("No pages")) {
+            contextParts.add("=== Your pages ===\n" + userPages);
         }
 
         // Include recent conversation (both user and bot) for continuity

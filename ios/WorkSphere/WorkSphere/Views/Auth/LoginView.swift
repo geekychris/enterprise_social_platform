@@ -244,9 +244,12 @@ struct LoginView: View {
                 }
             } catch let apiError as APIError {
                 self.error = apiError.localizedDescription
-                log("ERROR: \(apiError.localizedDescription)")
+                log("ERROR (API): \(apiError.localizedDescription)")
+            } catch let decodingError as DecodingError {
+                self.error = "Decoding error: \(decodingError.localizedDescription)"
+                log("ERROR (Decode): \(decodingError)")
             } catch {
-                self.error = error.localizedDescription
+                self.error = "\(error)"
                 log("ERROR: \(error)")
             }
             loading = false
