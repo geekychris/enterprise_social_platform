@@ -3,12 +3,27 @@ set -euo pipefail
 
 # WorkSphere Full Stack Startup Script
 # Starts all services in the correct order
+#
+# Usage:
+#   ./scripts/start-all.sh              # Start everything
+#   ./scripts/start-all.sh --no-app     # Start infrastructure only (run app from IDE)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SKIP_APP=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-app) SKIP_APP=true ;;
+    *) echo "Unknown option: $arg"; echo "Usage: $0 [--no-app]"; exit 1 ;;
+  esac
+done
 
 echo "═══════════════════════════════════════════════════"
 echo "  WorkSphere Full Stack Startup"
+if $SKIP_APP; then
+  echo "  (--no-app: skipping Social App, run from IDE)"
+fi
 echo "═══════════════════════════════════════════════════"
 
 # ── 1. Infrastructure services (brew) ──
@@ -42,7 +57,7 @@ docker network create structured-logging_logging-network 2>/dev/null && echo "  
 
 # ── 4. Data warehouse services ──
 echo ""
-echo "── Step 4: Data Warehouse (MinIO, Hive Metastore) ──"
+echo "── Step 4: Data Warehouse (MinIO, Hive Metastore, Trino, Spark) ──"
 if [ -f docker-compose.data-warehouse.yml ]; then
   docker compose -f docker-compose.data-warehouse.yml up -d 2>&1 | tail -5
   echo "  Waiting for Hive Metastore to initialize (can take 60-90 seconds)..."
@@ -74,13 +89,19 @@ done
 # ── 7. Social App ──
 echo ""
 echo "── Step 7: Social App ──"
-if pgrep -f 'social-app-1.0.0' > /dev/null; then
+if $SKIP_APP; then
+  echo "  ⏭ Skipped (--no-app). Start from IntelliJ or run manually:"
+  echo ""
+  echo "    java -jar social-platform/social-app/target/social-app-1.0.0-SNAPSHOT.jar \\"
+  echo "      --spring.datasource.password=social_dev_password \\"
+  echo "      --social.media.upload-dir=$PROJECT_DIR/uploads"
+  echo ""
+  echo "  See docs/INTELLIJ_RUN.md for IDE setup."
+elif pgrep -f 'social-app-1.0.0' > /dev/null; then
   echo "  ✓ Social App already running"
 else
   echo "  Starting Social App..."
   java -jar "$PROJECT_DIR/social-platform/social-app/target/social-app-1.0.0-SNAPSHOT.jar" \
-    --spring.datasource.url=jdbc:postgresql://localhost:5432/social_enterprise \
-    --spring.datasource.username=social \
     --spring.datasource.password=social_dev_password \
     --social.media.upload-dir="$PROJECT_DIR/uploads" \
     > /tmp/social-app.log 2>&1 &
@@ -104,7 +125,7 @@ echo "  Status"
 echo "═══════════════════════════════════════════════════"
 echo ""
 echo "Services:"
-pgrep -f 'social-app-1.0.0' > /dev/null && echo "  ✓ Social App         http://localhost:8080" || echo "  ✗ Social App"
+pgrep -f 'social-app-1.0.0' > /dev/null && echo "  ✓ Social App         http://localhost:8080" || echo "  · Social App         (not running — start from IDE or remove --no-app)"
 redis-cli ping 2>/dev/null | grep -q PONG && echo "  ✓ Redis              localhost:6379" || echo "  ✗ Redis"
 lsof -i :9092 2>/dev/null | grep -q LISTEN && echo "  ✓ Kafka              localhost:9092" || echo "  ✗ Kafka"
 curl -s http://localhost:11434/api/tags > /dev/null 2>&1 && echo "  ✓ Ollama             http://localhost:11434" || echo "  ✗ Ollama"

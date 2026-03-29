@@ -138,6 +138,13 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!-- AWS S3 (MinIO compatible) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.0</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

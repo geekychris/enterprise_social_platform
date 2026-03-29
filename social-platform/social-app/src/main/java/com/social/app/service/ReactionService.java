@@ -13,6 +13,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -28,19 +31,22 @@ public class ReactionService {
     private final AoeeGraphClient aoeeGraphClient;
     private final GlobalIdGenerator idGenerator;
     private final ApplicationEventPublisher eventPublisher;
+    private final CacheService cacheService;
 
     public ReactionService(ReactionRepository reactionRepository,
                            FollowRepository followRepository,
                            UserService userService,
                            AoeeGraphClient aoeeGraphClient,
                            GlobalIdGenerator idGenerator,
-                           ApplicationEventPublisher eventPublisher) {
+                           ApplicationEventPublisher eventPublisher,
+                           CacheService cacheService) {
         this.reactionRepository = reactionRepository;
         this.followRepository = followRepository;
         this.userService = userService;
         this.aoeeGraphClient = aoeeGraphClient;
         this.idGenerator = idGenerator;
         this.eventPublisher = eventPublisher;
+        this.cacheService = cacheService;
     }
 
     @Transactional
@@ -61,6 +67,7 @@ public class ReactionService {
         ReactionEntity saved = reactionRepository.save(entity);
 
         eventPublisher.publishEvent(new ReactionEvent(userId, targetId, reactionType, true));
+        cacheService.evict("reactions:counts:" + targetId);
         return saved;
     }
 
@@ -69,6 +76,7 @@ public class ReactionService {
         reactionRepository.findByTargetIdAndUserId(targetId, userId).ifPresent(existing -> {
             reactionRepository.delete(existing);
             eventPublisher.publishEvent(new ReactionEvent(userId, targetId, existing.getReactionType(), false));
+            cacheService.evict("reactions:counts:" + targetId);
         });
     }
 
@@ -142,11 +150,15 @@ public class ReactionService {
     }
 
     public Map<String, Long> getCounts(long targetId) {
-        Map<String, Long> counts = new HashMap<>();
-        for (Object[] row : reactionRepository.countGroupedByReactionType(targetId)) {
-            counts.put((String) row[0], (Long) row[1]);
-        }
-        return counts;
+        return cacheService.getWithType("reactions:counts:" + targetId,
+                new TypeReference<Map<String, Long>>() {},
+                Duration.ofSeconds(30), () -> {
+            Map<String, Long> counts = new HashMap<>();
+            for (Object[] row : reactionRepository.countGroupedByReactionType(targetId)) {
+                counts.put((String) row[0], (Long) row[1]);
+            }
+            return counts;
+        });
     }
 
     private Set<Long> getFollowedUserIds(long userId) {

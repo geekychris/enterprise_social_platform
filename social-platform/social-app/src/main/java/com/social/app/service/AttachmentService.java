@@ -11,11 +11,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
@@ -28,19 +32,27 @@ public class AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
     private final GlobalIdGenerator idGenerator;
-    private final Path uploadDir;
+    private final S3Client s3Client;
+    private final String bucket;
 
     public AttachmentService(AttachmentRepository attachmentRepository,
                              GlobalIdGenerator idGenerator,
-                             @Value("${social.media.upload-dir}") String uploadDir) {
+                             @Value("${social.media.s3.endpoint:http://localhost:9000}") String endpoint,
+                             @Value("${social.media.s3.access-key:admin}") String accessKey,
+                             @Value("${social.media.s3.secret-key:password123}") String secretKey,
+                             @Value("${social.media.s3.bucket:worksphere}") String bucket,
+                             @Value("${social.media.s3.region:us-east-1}") String region) {
         this.attachmentRepository = attachmentRepository;
         this.idGenerator = idGenerator;
-        this.uploadDir = Paths.get(uploadDir).toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(this.uploadDir);
-        } catch (IOException e) {
-            log.warn("Could not create upload directory: {}", this.uploadDir, e);
-        }
+        this.bucket = bucket;
+        this.s3Client = S3Client.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .forcePathStyle(true)
+                .build();
+        log.info("AttachmentService initialized with S3 endpoint: {}, bucket: {}", endpoint, bucket);
     }
 
     @Transactional
@@ -55,21 +67,30 @@ public class AttachmentService {
             return existing.get();
         }
 
-        // Save file
+        // Generate stored filename
         String originalFilename = file.getOriginalFilename();
         String extension = "";
         if (originalFilename != null && originalFilename.contains(".")) {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         String storedFilename = UUID.randomUUID() + extension;
-        Path targetPath = uploadDir.resolve(storedFilename);
-        Files.write(targetPath, fileBytes);
+
+        // Upload to S3/MinIO
+        String s3Key = storedFilename;
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(s3Key)
+                        .contentType(file.getContentType())
+                        .build(),
+                RequestBody.fromBytes(fileBytes));
+        log.debug("Uploaded file to S3: {}/{}", bucket, s3Key);
 
         var entity = new AttachmentEntity();
         entity.setId(idGenerator.next(ObjectType.ATTACHMENT).value());
         entity.setOwnerId(ownerId);
         entity.setMediaType(file.getContentType());
-        entity.setFileUrl("/uploads/" + storedFilename);
+        entity.setFileUrl("/api/media/" + storedFilename);
         entity.setFileSize(file.getSize());
         entity.setContentHash(contentHash);
 

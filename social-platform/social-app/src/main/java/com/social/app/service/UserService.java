@@ -11,6 +11,7 @@ import com.social.core.model.Visibility;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,11 +23,14 @@ public class UserService {
     private final UserRepository userRepository;
     private final FollowRepository followRepository;
     private final GlobalIdGenerator idGenerator;
+    private final CacheService cacheService;
 
-    public UserService(UserRepository userRepository, FollowRepository followRepository, GlobalIdGenerator idGenerator) {
+    public UserService(UserRepository userRepository, FollowRepository followRepository,
+                       GlobalIdGenerator idGenerator, CacheService cacheService) {
         this.userRepository = userRepository;
         this.followRepository = followRepository;
         this.idGenerator = idGenerator;
+        this.cacheService = cacheService;
     }
 
     @Transactional
@@ -110,7 +114,17 @@ public class UserService {
 
     @Transactional
     public UserEntity save(UserEntity entity) {
-        return userRepository.save(entity);
+        UserEntity saved = userRepository.save(entity);
+        cacheService.evict("user:summary:" + saved.getId());
+        cacheService.evict("user:dto:" + saved.getId());
+        return saved;
+    }
+
+    public UserSummaryDto getCachedSummary(long userId) {
+        return cacheService.get("user:summary:" + userId, UserSummaryDto.class,
+                Duration.ofMinutes(5), () -> {
+            return getById(userId).map(this::toSummaryDto).orElse(null);
+        });
     }
 
     public UserSummaryDto toSummaryDto(UserEntity entity) {

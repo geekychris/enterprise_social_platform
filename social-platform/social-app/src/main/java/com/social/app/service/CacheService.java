@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import java.time.Duration;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -57,6 +59,61 @@ public class CacheService {
         T value = loader.get();
         if (value != null) {
             put(key, value, Duration.ofMinutes(5));
+        }
+        return value;
+    }
+
+    /**
+     * Get a value with L1 -> L2 -> loader fallback, with custom TTL.
+     */
+    public <T> T get(String key, Class<T> type, Duration ttl, Supplier<T> loader) {
+        // Check L1 (Caffeine)
+        Object cached = localCache.getIfPresent(key);
+        if (cached != null) {
+            return type.cast(cached);
+        }
+
+        // Check L2 (Redis)
+        try {
+            String redisValue = redis.opsForValue().get(key);
+            if (redisValue != null) {
+                T value = objectMapper.readValue(redisValue, type);
+                localCache.put(key, value);
+                return value;
+            }
+        } catch (Exception ignored) {}
+
+        // Load from source
+        T value = loader.get();
+        if (value != null) {
+            put(key, value, ttl);
+        }
+        return value;
+    }
+
+    /**
+     * Get a value with L1 -> L2 -> loader fallback, using TypeReference for generic types (Maps, Lists).
+     */
+    public <T> T getWithType(String key, TypeReference<T> typeRef, Duration ttl, Supplier<T> loader) {
+        Object cached = localCache.getIfPresent(key);
+        if (cached != null) {
+            @SuppressWarnings("unchecked")
+            T result = (T) cached;
+            return result;
+        }
+
+        try {
+            String redisValue = redis.opsForValue().get(key);
+            if (redisValue != null) {
+                T value = objectMapper.readValue(redisValue, typeRef);
+                localCache.put(key, value);
+                return value;
+            }
+        } catch (Exception ignored) {}
+
+        T value = loader.get();
+        if (value != null) {
+            put(key, value, ttl);
         }
         return value;
     }

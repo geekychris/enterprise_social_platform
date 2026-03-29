@@ -11,11 +11,14 @@ import com.social.app.service.AnalyticsService.FeedFeatures;
 import com.social.core.dto.FeedResponse;
 import com.social.core.dto.PostDto;
 import com.social.core.model.Visibility;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,6 +45,8 @@ public class FeedService {
     private final RecommendationService recommendationService;
     private final AnalyticsService analyticsService;
     private final FeedFeatureExtractor feedFeatureExtractor;
+    private final StringRedisTemplate redis;
+    private final CacheService cacheService;
 
     public FeedService(FollowRepository followRepository,
                        MembershipRepository membershipRepository,
@@ -49,7 +54,9 @@ public class FeedService {
                        PostService postService,
                        RecommendationService recommendationService,
                        AnalyticsService analyticsService,
-                       FeedFeatureExtractor feedFeatureExtractor) {
+                       FeedFeatureExtractor feedFeatureExtractor,
+                       StringRedisTemplate redis,
+                       CacheService cacheService) {
         this.followRepository = followRepository;
         this.membershipRepository = membershipRepository;
         this.pageMembershipRepository = pageMembershipRepository;
@@ -57,31 +64,89 @@ public class FeedService {
         this.recommendationService = recommendationService;
         this.analyticsService = analyticsService;
         this.feedFeatureExtractor = feedFeatureExtractor;
+        this.redis = redis;
+        this.cacheService = cacheService;
     }
 
     public FeedResponse assembleFeed(long userId, Long cursor, int limit) {
-        // Get followed user IDs
-        List<Long> followedUserIds = followRepository.findByFollowerId(userId).stream()
-                .map(FollowEntity::getFollowedId)
-                .toList();
+        // Try pre-computed feed from Redis first
+        Set<String> cachedPostIds = redis.opsForZSet().reverseRange("feed:" + userId, 0, limit + 10);
+        if (cachedPostIds != null && !cachedPostIds.isEmpty()) {
+            List<Long> postIds = cachedPostIds.stream()
+                    .map(Long::parseLong)
+                    .toList();
+
+            // Apply cursor filter
+            List<Long> filteredIds = postIds;
+            if (cursor != null) {
+                filteredIds = postIds.stream().filter(id -> id < cursor).toList();
+            }
+
+            // Load posts from cache/DB by IDs
+            List<PostEntity> cachedPosts = filteredIds.stream()
+                    .limit(limit)
+                    .map(id -> postService.getById(id).orElse(null))
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            if (!cachedPosts.isEmpty()) {
+                // Apply visibility filter using cached group IDs
+                String groupsCacheKey = "user:groups:" + userId;
+                List<Long> groupIds = cacheService.getWithType(groupsCacheKey,
+                        new TypeReference<List<Long>>() {}, Duration.ofSeconds(60), () -> {
+                    List<Long> gids = new ArrayList<>(membershipRepository.findByUserId(userId).stream()
+                            .map(MembershipEntity::getGroupId).toList());
+                    List<Long> pids = pageMembershipRepository.findByUserId(userId).stream()
+                            .filter(pm -> "APPROVED".equals(pm.getStatus()))
+                            .map(PageMembershipEntity::getPageId).toList();
+                    gids.addAll(pids);
+                    return gids;
+                });
+
+                List<PostEntity> visiblePosts = cachedPosts.stream()
+                        .filter(p -> isVisible(p, userId, groupIds))
+                        .toList();
+
+                List<PostDto> feed = visiblePosts.stream()
+                        .map(p -> postService.toDto(p, userId))
+                        .toList();
+
+                boolean hasMore = filteredIds.size() > limit;
+                String nextCursor = visiblePosts.isEmpty()
+                        ? null
+                        : String.valueOf(visiblePosts.getLast().getId());
+
+                return new FeedResponse(feed, nextCursor, hasMore);
+            }
+        }
+
+        // Fallback: assemble feed from DB
+
+        // Get followed user IDs (cached)
+        String followsCacheKey = "user:follows:" + userId;
+        List<Long> followedUserIds = cacheService.getWithType(followsCacheKey,
+                new TypeReference<List<Long>>() {}, Duration.ofSeconds(60), () -> {
+            return followRepository.findByFollowerId(userId).stream()
+                    .map(FollowEntity::getFollowedId)
+                    .toList();
+        });
 
         // Include own posts
         List<Long> authorIds = new ArrayList<>(followedUserIds);
         authorIds.add(userId);
 
-        // Get team/group IDs user belongs to
-        List<MembershipEntity> memberships = membershipRepository.findByUserId(userId);
-        List<Long> groupIds = new ArrayList<>(memberships.stream()
-                .map(MembershipEntity::getGroupId)
-                .toList());
-
-        // Also include page IDs from page memberships
-        List<PageMembershipEntity> pageMemberships = pageMembershipRepository.findByUserId(userId);
-        List<Long> pageIds = pageMemberships.stream()
-                .filter(pm -> "APPROVED".equals(pm.getStatus()))
-                .map(PageMembershipEntity::getPageId)
-                .toList();
-        groupIds.addAll(pageIds);
+        // Get team/group IDs user belongs to (cached)
+        String groupsCacheKey = "user:groups:" + userId;
+        List<Long> groupIds = cacheService.getWithType(groupsCacheKey,
+                new TypeReference<List<Long>>() {}, Duration.ofSeconds(60), () -> {
+            List<Long> gids = new ArrayList<>(membershipRepository.findByUserId(userId).stream()
+                    .map(MembershipEntity::getGroupId).toList());
+            List<Long> pids = pageMembershipRepository.findByUserId(userId).stream()
+                    .filter(pm -> "APPROVED".equals(pm.getStatus()))
+                    .map(PageMembershipEntity::getPageId).toList();
+            gids.addAll(pids);
+            return gids;
+        });
 
         List<String> targetTypes = List.of("TEAM_FEED", "GROUP_FEED", "PAGE_FEED", "PROJECT_FEED");
 

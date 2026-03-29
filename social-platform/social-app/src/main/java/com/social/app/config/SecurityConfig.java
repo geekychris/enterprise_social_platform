@@ -34,6 +34,7 @@ public class SecurityConfig {
                         .requestMatchers("/graphql").permitAll()
                         .requestMatchers("/graphiql").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/media/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )

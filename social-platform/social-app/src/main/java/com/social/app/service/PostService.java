@@ -15,11 +15,13 @@ import com.social.core.id.GlobalIdGenerator;
 import com.social.core.id.ObjectType;
 import com.social.core.model.TargetType;
 import com.social.core.model.Visibility;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +42,7 @@ public class PostService {
     private final ApplicationEventPublisher eventPublisher;
     private final UserService userService;
     private final JdbcTemplate jdbc;
+    private final CacheService cacheService;
 
     public PostService(PostRepository postRepository,
                        ReactionRepository reactionRepository,
@@ -51,7 +54,8 @@ public class PostService {
                        GlobalIdGenerator idGenerator,
                        ApplicationEventPublisher eventPublisher,
                        UserService userService,
-                       JdbcTemplate jdbc) {
+                       JdbcTemplate jdbc,
+                       CacheService cacheService) {
         this.postRepository = postRepository;
         this.pollRepository = pollRepository;
         this.pollService = pollService;
@@ -63,6 +67,7 @@ public class PostService {
         this.eventPublisher = eventPublisher;
         this.userService = userService;
         this.jdbc = jdbc;
+        this.cacheService = cacheService;
     }
 
     @Transactional
@@ -109,67 +114,75 @@ public class PostService {
     }
 
     public PostDto toDto(PostEntity entity, Long currentUserId) {
-        UserSummaryDto author = userService.getById(entity.getAuthorId())
-                .map(userService::toSummaryDto)
-                .orElse(null);
+        String cacheKey = "post:" + entity.getId() + ":v:" + (currentUserId != null ? currentUserId : 0);
+        return cacheService.get(cacheKey, PostDto.class, Duration.ofSeconds(60), () -> {
+            UserSummaryDto author = userService.getCachedSummary(entity.getAuthorId());
 
-        Map<String, Long> reactionCounts = getReactionCounts(entity.getId());
-        long commentCount = commentRepository.countByPostId(entity.getId());
+            Map<String, Long> reactionCounts = getReactionCounts(entity.getId());
+            long commentCount = commentRepository.countByPostId(entity.getId());
 
-        String currentUserReaction = null;
-        if (currentUserId != null) {
-            currentUserReaction = reactionRepository.findByTargetIdAndUserId(entity.getId(), currentUserId)
-                    .map(r -> r.getReactionType())
+            String currentUserReaction = null;
+            if (currentUserId != null) {
+                currentUserReaction = reactionRepository.findByTargetIdAndUserId(entity.getId(), currentUserId)
+                        .map(r -> r.getReactionType())
+                        .orElse(null);
+            }
+
+            List<Long> attachmentIds = jdbc.queryForList(
+                    "SELECT attachment_id FROM post_attachments WHERE post_id = ? ORDER BY sort_order",
+                    Long.class, entity.getId());
+            List<AttachmentDto> attachments = attachmentIds.isEmpty() ? List.of() :
+                    attachmentRepository.findByIdIn(attachmentIds).stream()
+                            .map(attachmentService::toDto)
+                            .toList();
+
+            // Check for attached poll
+            PollDto pollDto = pollRepository.findByPostId(entity.getId())
+                    .map(poll -> pollService.toDto(poll.getId(), currentUserId))
                     .orElse(null);
-        }
 
-        List<Long> attachmentIds = jdbc.queryForList(
-                "SELECT attachment_id FROM post_attachments WHERE post_id = ? ORDER BY sort_order",
-                Long.class, entity.getId());
-        List<AttachmentDto> attachments = attachmentIds.isEmpty() ? List.of() :
-                attachmentRepository.findByIdIn(attachmentIds).stream()
-                        .map(attachmentService::toDto)
-                        .toList();
-
-        // Check for attached poll
-        PollDto pollDto = pollRepository.findByPostId(entity.getId())
-                .map(poll -> pollService.toDto(poll.getId(), currentUserId))
-                .orElse(null);
-
-        return new PostDto(
-                entity.getId(),
-                author,
-                entity.getContent(),
-                entity.getTargetType() != null ? TargetType.valueOf(entity.getTargetType()) : null,
-                entity.getTargetId() != null ? entity.getTargetId() : 0L,
-                Visibility.valueOf(entity.getVisibility()),
-                attachments,
-                reactionCounts,
-                currentUserReaction,
-                commentCount,
-                entity.getCreatedAt(),
-                false,
-                null,
-                pollDto
-        );
+            return new PostDto(
+                    entity.getId(),
+                    author,
+                    entity.getContent(),
+                    entity.getTargetType() != null ? TargetType.valueOf(entity.getTargetType()) : null,
+                    entity.getTargetId() != null ? entity.getTargetId() : 0L,
+                    Visibility.valueOf(entity.getVisibility()),
+                    attachments,
+                    reactionCounts,
+                    currentUserReaction,
+                    commentCount,
+                    entity.getCreatedAt(),
+                    false,
+                    null,
+                    pollDto
+            );
+        });
     }
 
     private Map<String, Long> getReactionCounts(long targetId) {
-        Map<String, Long> counts = new HashMap<>();
-        for (Object[] row : reactionRepository.countGroupedByReactionType(targetId)) {
-            counts.put((String) row[0], (Long) row[1]);
-        }
-        return counts;
+        String cacheKey = "reactions:" + targetId;
+        return cacheService.getWithType(cacheKey, new TypeReference<Map<String, Long>>() {},
+                Duration.ofSeconds(30), () -> {
+            Map<String, Long> counts = new HashMap<>();
+            for (Object[] row : reactionRepository.countGroupedByReactionType(targetId)) {
+                counts.put((String) row[0], (Long) row[1]);
+            }
+            return counts;
+        });
     }
 
     @Transactional
     public PostEntity update(PostEntity entity, String content) {
         entity.setContent(content);
-        return postRepository.save(entity);
+        PostEntity saved = postRepository.save(entity);
+        cacheService.evictPattern("post:" + entity.getId() + ":*");
+        return saved;
     }
 
     @Transactional
     public void delete(long postId) {
         postRepository.deleteById(postId);
+        cacheService.evictPattern("post:" + postId + ":*");
     }
 }
