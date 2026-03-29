@@ -22,10 +22,10 @@ lsof -i :9092 2>/dev/null | grep -q LISTEN && echo "  ✓ Kafka" || echo "  ✗ 
 
 # ── 2. Docker services (social platform core) ──
 echo ""
-echo "── Step 2: Core Docker services ──"
+echo "── Step 2: Core Docker services (Postgres, OpenSearch, AOEE) ──"
 cd "$PROJECT_DIR"
-if [ -f social-platform/docker-compose.yml ]; then
-  docker compose -f social-platform/docker-compose.yml up -d 2>&1 | grep -v "^$" | tail -5
+if [ -f docker-compose.yml ]; then
+  docker compose up -d 2>&1 | grep -v "^$" | tail -5
 fi
 
 # Check core services
@@ -33,6 +33,7 @@ sleep 5
 docker ps --format "{{.Names}} {{.Status}}" | grep "social-postgres" | head -1 | sed 's/^/  /'
 docker ps --format "{{.Names}} {{.Status}}" | grep "social-opensearch" | head -1 | sed 's/^/  /'
 docker ps --format "{{.Names}} {{.Status}}" | grep "social-aoee" | head -1 | sed 's/^/  /'
+docker ps --format "{{.Names}} {{.Status}}" | grep "social-aoee-proxy" | head -1 | sed 's/^/  /'
 
 # ── 3. Ensure Docker network exists ──
 echo ""
@@ -109,6 +110,7 @@ lsof -i :9092 2>/dev/null | grep -q LISTEN && echo "  ✓ Kafka              loc
 curl -s http://localhost:11434/api/tags > /dev/null 2>&1 && echo "  ✓ Ollama             http://localhost:11434" || echo "  ✗ Ollama"
 docker ps --format "{{.Names}}" | grep -q "social-postgres" && echo "  ✓ PostgreSQL         localhost:5432" || echo "  ✗ PostgreSQL"
 docker ps --format "{{.Names}}" | grep -q "social-opensearch" && echo "  ✓ OpenSearch         http://localhost:9200" || echo "  ✗ OpenSearch"
+docker ps --format "{{.Names}}" | grep -q "social-aoee-proxy" && echo "  ✓ AOEE Graph Cache   localhost:8082 (write-through)" || echo "  ✗ AOEE Graph Cache"
 docker ps --format "{{.Names}}" | grep -q "ws-minio" && echo "  ✓ MinIO              http://localhost:9000 (console: 9001)" || echo "  ✗ MinIO"
 docker ps --format "{{.Names}}" | grep -q "ws-hive-metastore" && echo "  ✓ Hive Metastore     localhost:9083" || echo "  ✗ Hive Metastore"
 docker ps --format "{{.Names}}" | grep -q "ws-trino" && echo "  ✓ Trino              http://localhost:8081" || echo "  ✗ Trino"
