@@ -39,6 +39,7 @@ export default function ReactionBar({
 }: Props) {
   const [showPicker, setShowPicker] = useState(false);
   const [showWhoLiked, setShowWhoLiked] = useState(false);
+  const whoLikedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
 
   // Local optimistic state
@@ -156,8 +157,8 @@ export default function ReactionBar({
       {totalReactions > 0 && (
         <div
           className="relative flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer group flex-1 min-w-0"
-          onMouseEnter={() => setShowWhoLiked(true)}
-          onMouseLeave={() => setShowWhoLiked(false)}
+          onMouseEnter={() => { if (whoLikedTimer.current) clearTimeout(whoLikedTimer.current); setShowWhoLiked(true); }}
+          onMouseLeave={() => { whoLikedTimer.current = setTimeout(() => setShowWhoLiked(false), 300); }}
         >
           {/* Emoji icons */}
           <span className="flex -space-x-0.5 shrink-0">
@@ -179,7 +180,12 @@ export default function ReactionBar({
 
           {/* Who liked popover */}
           {showWhoLiked && reactors && reactors.length > 0 && (
-            <div className="absolute bottom-full left-0 mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg shadow-xl p-3 z-50">
+            <div
+              className="absolute bottom-full left-0 mb-0 pb-2 w-72 z-50"
+              onMouseEnter={() => { if (whoLikedTimer.current) clearTimeout(whoLikedTimer.current); }}
+              onMouseLeave={() => { whoLikedTimer.current = setTimeout(() => setShowWhoLiked(false), 300); }}
+            >
+            <div className="bg-gray-800 text-white text-xs rounded-lg shadow-xl p-3">
               {/* Followed users section */}
               {followedReactors.length > 0 && (
                 <>
@@ -247,6 +253,7 @@ export default function ReactionBar({
 
               {/* Arrow */}
               <div className="absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-gray-800" />
+            </div>
             </div>
           )}
         </div>

@@ -1,5 +1,9 @@
 package com.social.app.controller.rest;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.social.app.persistence.entity.GraphEdgeEntity;
 import com.social.app.persistence.entity.GraphEntityEntity;
 import com.social.app.persistence.repository.GraphEdgeRepository;
@@ -8,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -26,10 +31,27 @@ public class AoeePersistenceController {
 
     // --- DTOs ---
 
+    /**
+     * Always serialize longs as JSON numbers, overriding the global SafeLong serializer.
+     * AOEE's Rust server expects i64, not strings.
+     */
+    static class RawLongSerializer extends JsonSerializer<Long> {
+        @Override
+        public void serialize(Long value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+            gen.writeNumber(value);
+        }
+    }
+
     public record EdgeRequest(long src, String edgeType, long dst, Long timestampNs, Integer metadata) {}
 
-    public record EdgeResponse(long id, long srcId, String edgeType, long dstId, long timestampNs,
-                                int metadata, String createdAt) {
+    public record EdgeResponse(
+            @JsonSerialize(using = RawLongSerializer.class) long id,
+            @JsonSerialize(using = RawLongSerializer.class) long srcId,
+            String edgeType,
+            @JsonSerialize(using = RawLongSerializer.class) long dstId,
+            @JsonSerialize(using = RawLongSerializer.class) long timestampNs,
+            int metadata,
+            String createdAt) {
         static EdgeResponse from(GraphEdgeEntity e) {
             return new EdgeResponse(e.getId(), e.getSrcId(), e.getEdgeType(), e.getDstId(),
                     e.getTimestampNs(), e.getMetadata() != null ? e.getMetadata() : 0,
@@ -38,7 +60,7 @@ public class AoeePersistenceController {
     }
 
     public record ExistsResponse(boolean exists) {}
-    public record CountResponse(long count) {}
+    public record CountResponse(@JsonSerialize(using = RawLongSerializer.class) long count) {}
     public record BatchEdgeResponse(long edgesCreated) {}
 
     public record EntityRequest(long id, String entityType, String name) {}

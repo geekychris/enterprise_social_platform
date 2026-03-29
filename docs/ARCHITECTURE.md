@@ -982,12 +982,9 @@ flowchart LR
 
 All sync operations are `@Async` to avoid blocking the main request thread. If AOEE is unavailable, errors are logged but the main operation succeeds.
 
-### 12.5 Backfill
+### 12.5 Read-Through & Write-Through
 
-The admin Graph Explorer includes a **"Load DB into AOEE"** button (`POST /api/admin/graph/backfill`) that reads all follows, reactions, posts, and memberships from PostgreSQL and pushes them to AOEE. This is used when:
-- AOEE is started fresh (in-memory cache is empty)
-- Data was generated before AOEE was running
-- AOEE was restarted and lost its cache
+AOEE uses the social app as its persistence backend via HTTP. On cache miss, it calls `GET /api/v1/edges?src=&type=` to load edges on demand. On write, it persists through to `POST /api/v1/edges`. This means AOEE doesn't need a manual backfill after restart — graph data is lazily loaded from PostgreSQL as users access it.
 
 ### 12.6 Configuration
 
@@ -1005,12 +1002,23 @@ social:
 aoee-server:
   environment:
     AOEE_LISTEN_ADDR: "0.0.0.0:50051"
-    AOEE_STORAGE_TYPE: memory        # or "http" for write-through
-    AOEE_HTTP_URL: "http://host.docker.internal:8080"  # social-app callback
-    AOEE_WRITE_THROUGH: "false"      # "true" to persist via HTTP
+    AOEE_STORAGE_TYPE: http
+    AOEE_HTTP_URL: "http://host.docker.internal:8080"
+    AOEE_WRITE_THROUGH: "true"
 ```
 
-### 12.7 Graceful Degradation
+With this configuration:
+- **On read (cache miss):** AOEE calls `GET /api/v1/edges?src=&type=` to load edges from PostgreSQL on demand
+- **On write:** AOEE writes to its in-memory cache AND calls `POST /api/v1/edges` to persist to PostgreSQL
+- **On restart:** The cache starts empty but warms lazily — each user's graph is loaded from PostgreSQL on first access
+
+The `/api/v1/edges` endpoints in `AoeePersistenceController` use `@JsonSerialize(using = RawLongSerializer.class)` to force numeric JSON output for long fields, since AOEE's Rust deserializer expects `i64` numbers (not the stringified longs that the global SafeLong serializer produces for JavaScript clients).
+
+### 12.7 Backfill (Optional Pre-Warming)
+
+The admin Graph Explorer includes a **"Load DB into AOEE"** button (`POST /api/admin/graph/backfill`) that reads all follows, reactions, posts, and memberships from PostgreSQL and pushes them to AOEE in bulk. This is optional — the read-through pattern handles lazy loading — but can eliminate cold-start latency after a fresh AOEE restart.
+
+### 12.8 Graceful Degradation
 
 Every `AoeeGraphClient` method wraps calls in try/catch and returns safe defaults:
 - `getNeighbors()` → empty list
