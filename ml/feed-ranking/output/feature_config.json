@@ -1,0 +1,31 @@
+{
+  "model_file": "feed_ranker.ubj",
+  "total_features": 10,
+  "user_features": 2,
+  "feature_names": [
+    "engagement",
+    "recency_hours",
+    "affinity",
+    "reaction_count",
+    "comment_count",
+    "author_followers",
+    "is_recommended",
+    "has_attachment",
+    "has_poll",
+    "social_distance"
+  ],
+  "user_feature_names": [
+    "affinity",
+    "social_distance"
+  ],
+  "item_feature_names": [
+    "engagement",
+    "recency_hours",
+    "reaction_count",
+    "comment_count",
+    "author_followers",
+    "is_recommended",
+    "has_attachment",
+    "has_poll"
+  ]
+}

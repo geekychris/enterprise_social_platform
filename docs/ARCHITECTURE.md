@@ -2,13 +2,18 @@
 
 ## 1. Overview
 
-Full-stack social networking platform built with:
+Full-stack enterprise social networking platform built with:
 
 - **Backend:** Spring Boot 3.4.3 (Java 21)
-- **Frontend:** React 18 (TypeScript/Vite)
+- **Frontend:** React 18 (TypeScript/Vite), iOS (SwiftUI), Android (Jetpack Compose)
 - **Database:** PostgreSQL 16
 - **Search:** OpenSearch 2.12 for full-text search
-- **Graph Cache:** AOEE — a custom Rust gRPC service for in-memory social graph caching
+- **Cache:** Redis (L2) + Caffeine (L1) two-layer caching
+- **Streaming:** Apache Kafka (event streaming + structured logging)
+- **AI:** Ollama LLM (bot assistant "Roid", summarization)
+- **Graph Cache:** AOEE — custom Rust gRPC service for in-memory social graph
+- **Data Warehouse:** Spark → Apache Iceberg (MinIO/S3) → Trino
+- **ML:** XGBoost feed ranking with GBDT kernel codegen
 
 The project is organized as a **monorepo with a Maven multi-module build**.
 
@@ -19,36 +24,52 @@ The project is organized as a **monorepo with a Maven multi-module build**.
 ```mermaid
 graph TB
     Browser["Browser<br/>(React SPA :3999)"]
+    iOS["iOS App<br/>(SwiftUI)"]
+    Android["Android App<br/>(Compose)"]
 
     subgraph Backend ["Spring Boot (:8080)"]
         REST["/api/* REST"]
-        GQL["/graphql GraphQL"]
+        WS["/ws WebSocket<br/>(STOMP/SockJS)"]
         Services["Service Layer"]
         Events["Event Bus"]
+        RateLimit["Rate Limit Filter"]
     end
 
     subgraph Infrastructure
         PG["PostgreSQL :5432"]
         OS["OpenSearch :9200"]
-        Upload["Local /uploads"]
+        Redis["Redis :6379<br/>(Cache + Pub/Sub)"]
+        Kafka["Kafka :9092<br/>(Event Streaming)"]
+        Ollama["Ollama :11434<br/>(LLM)"]
     end
 
     subgraph AOEE ["AOEE Graph Cache"]
-        Proxy["AOEE Proxy :8082<br/>(Spring Boot REST)"]
-        GRPC["AOEE Server :50051<br/>(Rust gRPC)"]
+        Proxy["AOEE Proxy :8082"]
+        GRPC["AOEE Server :50051"]
     end
 
-    Browser -->|"REST /api/*"| REST
-    Browser -->|"GraphQL /graphql"| GQL
-    Browser -->|"/uploads/*"| Upload
-    REST --> Services
-    GQL --> Services
+    subgraph Warehouse ["Data Warehouse"]
+        Spark["Spark Consumer"]
+        Iceberg["Iceberg<br/>(MinIO S3)"]
+        Trino["Trino :8081"]
+    end
+
+    Browser -->|"REST"| REST
+    iOS -->|"REST"| REST
+    Android -->|"REST"| REST
+    Browser -->|"WebSocket"| WS
+    REST --> RateLimit --> Services
+    WS --> Services
     Services --> PG
     Services --> OS
+    Services --> Redis
+    Services -->|"structured logs"| Kafka
+    Services --> Ollama
     Services -->|"async events"| Events
     Events -->|"graph sync"| Proxy
+    Events -->|"event publish"| Kafka
     Proxy -->|"gRPC"| GRPC
-    GRPC -->|"persist edges"| PG
+    Kafka --> Spark --> Iceberg --> Trino
 ```
 
 ---
@@ -449,14 +470,406 @@ sequenceDiagram
 | Comment depth limit (1) | Prevents deeply nested threads; simpler UI |
 | Content-hash deduplication | Saves storage for identical file uploads |
 | 80/20 organic/recommended feed | Discovery without overwhelming organic content |
+| Kafka for analytics events | Decoupled, durable event stream; replay for reprocessing |
+| Iceberg on MinIO | Open table format with time travel; local S3-compatible storage |
+| Heuristic scoring first, GBDT later | Ship fast, then replace with trained model when data exists |
+| Structured log configs as JSON | Single source of truth for Kafka schemas, Iceberg tables, and code-generated loggers |
 
 ---
 
-## 9. AOEE Integration Deep Dive
+## 9. Scalability Infrastructure
+
+### 9.1 Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Clients                                 │
+│   React SPA  ·  iOS (SwiftUI)  ·  Android (Compose)        │
+└──────┬───────────────┬──────────────────┬───────────────────┘
+       │ REST          │ WebSocket        │ REST
+       ▼               ▼                  ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  Spring Boot (:8080)                          │
+│  ┌──────────┐  ┌─────────────┐  ┌────────────┐              │
+│  │ REST API │  │ STOMP/WS    │  │ Rate Limit │              │
+│  │ Controllers│ │ Gateway     │  │ Filter     │              │
+│  └────┬─────┘  └──────┬──────┘  └────────────┘              │
+│       ▼               ▼                                      │
+│  ┌────────────────────────────────┐                          │
+│  │        Service Layer           │                          │
+│  │  Feed · Message · Bot · Org   │                          │
+│  └──┬────────┬────────┬──────────┘                          │
+│     │        │        │                                      │
+│     ▼        ▼        ▼                                      │
+│  ┌──────┐ ┌──────┐ ┌───────┐                                │
+│  │Redis │ │Kafka │ │Ollama │                                │
+│  │Cache │ │Events│ │  LLM  │                                │
+│  └──────┘ └──────┘ └───────┘                                │
+└──────────────────────────────────────────────────────────────┘
+       │               │
+       ▼               ▼
+┌──────────┐   ┌──────────────────────────────────────────────┐
+│PostgreSQL│   │          Data Warehouse                       │
+│ + AOEE   │   │  Kafka → Spark → Iceberg (MinIO) → Trino    │
+└──────────┘   └──────────────────────────────────────────────┘
+```
+
+### 12.2 Redis (Two-Layer Cache + Pub/Sub)
+
+**L1 Cache:** Caffeine (in-process, 1000 entries, 30s TTL)
+**L2 Cache:** Redis (shared, configurable TTL per key type)
+
+```
+CacheService.getOrLoad(key, ttl, loader)
+  → check L1 (Caffeine)
+    → hit: return
+    → miss: check L2 (Redis)
+      → hit: populate L1, return
+      → miss: call loader(), populate L2 + L1, return
+```
+
+Used for: conversation lists (10s), user profiles (60s), unread counts (30s), feed entries.
+
+**Pub/Sub:** `MessageBroadcastService` publishes messages to Redis channels for cross-instance delivery when horizontal scaling.
+
+### 12.3 Kafka (Event Streaming)
+
+Five topics, each with 4 partitions:
+
+| Topic | Producer | Purpose |
+|---|---|---|
+| `posts.created` | `EventPublisher` | Feed fan-out trigger |
+| `messages.sent` | `EventPublisher` | Message delivery events |
+| `reactions.added` | `EventPublisher` | Engagement events |
+| `worksphere-feed-impressions` | `FeedImpressionLogger` | ML training data (structured) |
+| `worksphere-user-interactions` | `UserInteractionLogger` | Analytics events (structured) |
+
+`FeedFanoutConsumer` reads `posts.created` to pre-compute feed entries in Redis sorted sets.
+
+### 12.4 WebSocket (STOMP over SockJS)
+
+Real-time message delivery via Spring's STOMP broker:
+
+- Endpoint: `/ws` (SockJS fallback)
+- Destinations: `/topic/conversation/{id}`, `/user/{id}/queue/messages`
+- `MessageBroadcastService` bridges REST message creation to WebSocket push
+
+### 12.5 Rate Limiting
+
+`RateLimitFilter` enforces per-user request limits using Redis:
+
+- Default: 300 requests/minute
+- `/api/ai/**`: 60 requests/minute
+- `/api/messages/**`: 120 requests/minute
+
+---
+
+## 10. ML Feed Ranking Pipeline
+
+### 10.1 End-to-End Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ONLINE (per request)                                                │
+│                                                                     │
+│  Feed Request                                                       │
+│      │                                                              │
+│      ▼                                                              │
+│  FeedService.assembleFeed()                                         │
+│      │                                                              │
+│      ├─→ FeedFeatureExtractor.extractFeatures()  ← 10 features     │
+│      │       per post × per viewer                                  │
+│      │                                                              │
+│      ├─→ FeedFeatureExtractor.computeScore()     ← heuristic       │
+│      │   score = engagement × 0.5^(hours/24) × affinity             │
+│      │                                                              │
+│      ├─→ Sort posts by score                                        │
+│      │                                                              │
+│      └─→ AnalyticsService.logFeedImpression()    ← fire-and-forget │
+│              │                                                      │
+│              ▼                                                      │
+│         FeedImpressionLogger → Kafka                                │
+│         (worksphere-feed-impressions)                                │
+│                                                                     │
+│  User clicks/reacts/comments                                        │
+│      │                                                              │
+│      └─→ UserInteractionLogger → Kafka                              │
+│          (worksphere-user-interactions)                              │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────────────┐
+│ OFFLINE (batch)                                                     │
+│                                                                     │
+│  Spark Consumer (Docker) — 30-second micro-batches                  │
+│      │                                                              │
+│      └─→ Iceberg Tables (MinIO S3)                                  │
+│              │                                                      │
+│              ▼                                                      │
+│         Trino SQL                                                   │
+│              │                                                      │
+│              ├─→ JOIN impressions + interactions → training labels   │
+│              │                                                      │
+│              └─→ Export to Parquet                                   │
+│                      │                                              │
+│                      ▼                                              │
+│               XGBoost Training (ml/feed-ranking/train.py)           │
+│                      │                                              │
+│                      ├─→ feed_ranker.ubj (XGBoost binary)           │
+│                      │                                              │
+│                      └─→ GBDT Kernel Codegen                        │
+│                              │                                      │
+│                              └─→ Optimized C scoring kernel         │
+│                                      │                              │
+│                                      └─→ gRPC inference server      │
+│                                          (replaces heuristic)       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 Feature Extraction
+
+`FeedFeatureExtractor` computes 10 features per (post, viewer) pair:
+
+| # | Feature | Type | Source | Description |
+|---|---|---|---|---|
+| 0 | `engagement` | float | DB | `reactions + comments × 2` |
+| 1 | `recency_hours` | float | computed | hours since post creation |
+| 2 | `affinity` | float | DB | `1 + viewer_reactions_to_author × 0.3` |
+| 3 | `reaction_count` | int | DB | total reactions on post |
+| 4 | `comment_count` | int | DB | total comments on post |
+| 5 | `author_follower_count` | int | DB | followers of post author |
+| 6 | `is_recommended` | bool | logic | set by RecommendationService |
+| 7 | `has_attachment` | bool | DB | post has image/file |
+| 8 | `has_poll` | bool | DB | post has a poll |
+| 9 | `social_distance` | int | follows | 1=direct, 2=FoF, 3=stranger |
+
+Features 2 and 9 are **user-level** (vary per viewer); the rest are **item-level** (same for all viewers).
+
+### 10.3 Current Scoring (Heuristic)
+
+```java
+double recencyDecay = Math.pow(0.5, recencyHours / 24.0);  // half-life: 24 hours
+score = engagement * recencyDecay * affinity;
+```
+
+### 10.4 Model Training
+
+```bash
+cd ml/feed-ranking
+
+# Synthetic data (development)
+python3 train.py --samples 100000 --trees 200
+
+# Real data (from Trino export)
+python3 train.py --data real_training_data.parquet --trees 500 --depth 8
+```
+
+**XGBoost hyperparameters:** 200 trees, max depth 6, learning rate 0.1, `binary:logistic` objective.
+**Validation gates:** AUC-ROC >= 0.65, AUC-PR >= 0.25, 5-fold cross-validation.
+
+Outputs:
+- `output/feed_ranker.ubj` — XGBoost binary (for GBDT kernel codegen)
+- `output/feed_ranker.json` — human-readable model
+- `output/feed_ranker_result.json` — metrics, feature importance, hyperparams
+- `output/feature_config.json` — feature schema for ranker framework
+
+### 10.5 Building Training Labels
+
+The key join that creates labeled training data:
+
+```sql
+-- In Trino: join impressions with subsequent interactions
+SELECT
+    fi.user_id, fi.post_id,
+    fi.feat_engagement, fi.feat_recency_hours, fi.feat_affinity,
+    fi.feat_reaction_count, fi.feat_comment_count,
+    fi.feat_author_follower_count, fi.feat_is_recommended,
+    fi.feat_has_attachment, fi.feat_has_poll, fi.feat_social_distance,
+    CASE WHEN ui.user_id IS NOT NULL THEN 1 ELSE 0 END AS engaged
+FROM iceberg.worksphere.feedimpression fi
+LEFT JOIN iceberg.worksphere.userinteraction ui
+    ON fi.user_id = ui.user_id
+    AND fi.post_id = ui.target_id
+    AND ui.interaction_type IN ('reaction', 'comment', 'FEED_CLICK')
+    AND ui.timestamp BETWEEN fi.timestamp AND fi.timestamp + INTERVAL '5' MINUTE
+WHERE fi.event_date >= CURRENT_DATE - INTERVAL '30' DAY;
+```
+
+### 10.6 GBDT Kernel Generation
+
+Uses `geekychris/gbdt_accelerated_ranker_framework` to convert the XGBoost model into optimized C scoring code:
+
+```bash
+python3 -m cuda_codegen generate \
+  --model output/feed_ranker.ubj \
+  --output output/generated \
+  --user-features 2 \
+  --library --cpu
+```
+
+The generated kernel eliminates XGBoost runtime overhead by converting the tree ensemble into a flat decision function. The `--user-features 2` flag tells the codegen that features at indices 2 (affinity) and 9 (social_distance) vary per-user and should be passed at inference time, while the remaining 8 item features can be pre-computed and cached.
+
+### 10.7 Deployment Path
+
+1. Deploy `scorched` gRPC server with the generated kernel
+2. Add gRPC client to `FeedService`
+3. Replace `FeedFeatureExtractor.computeScore()` with gRPC call
+4. A/B test: 50% heuristic vs 50% GBDT, compare engagement rates
+
+---
+
+## 11. Structured Logging & Data Warehouse
+
+### 11.1 Overview
+
+The structured logging pipeline uses `geekychris/structured-logger` to generate type-safe Kafka loggers from JSON schema definitions. Events flow through Kafka into Apache Iceberg tables (stored on MinIO) and are queryable via Trino SQL.
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌───────────────┐
+│ JSON Schema │────▶│ Code Generator   │────▶│ Java Logger   │
+│ log-configs/│     │ (structured-     │     │ Classes       │
+│ *.json      │     │  logger)         │     │ (type-safe)   │
+└─────────────┘     └──────────────────┘     └───────┬───────┘
+                                                     │
+                                                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        Kafka                                 │
+│  worksphere-feed-impressions (4 partitions, 30d retention)  │
+│  worksphere-user-interactions (4 partitions, 30d retention) │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Spark Consumer (docker/spark-consumer/)                     │
+│  - Reads JSON configs to auto-discover schemas               │
+│  - Creates Iceberg tables via Hive Metastore                 │
+│  - Streaming micro-batches every 30 seconds                  │
+│  - Parses envelope: {_log_type, _log_class, _version, data} │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Apache Iceberg (on MinIO S3)                                │
+│  Catalog: iceberg.worksphere                                 │
+│  Tables: feedimpression, userinteraction                     │
+│  Format: Parquet + Snappy, format-version 2                  │
+│  Partitioned by: event_date (+ interaction_type for UI)      │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Trino (:8081)                                               │
+│  - ANSI SQL over Iceberg                                     │
+│  - Used for ad-hoc analytics & training data export          │
+│  - iceberg.worksphere.feedimpression                         │
+│  - iceberg.worksphere.userinteraction                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 11.2 Log Schema Definitions
+
+Schemas live in `log-configs/` as JSON files. Each defines:
+
+- **Kafka config:** topic name, partitions, retention
+- **Warehouse config:** table name, partition columns, sort order, retention days
+- **Fields:** name, type, required flag, description
+
+**`feed_impression.json`** — 20 fields including all 10 ML ranking features:
+
+| Field | Type | Description |
+|---|---|---|
+| `timestamp` | timestamp | Event time |
+| `event_date` | date | Partition key |
+| `user_id` | long | Viewing user |
+| `post_id` | long | Viewed post |
+| `author_id` | long | Post author |
+| `position` | int | Position in feed |
+| `score` | double | Ranking score |
+| `source` | string | `organic` or `recommended` |
+| `feat_engagement` ... `feat_social_distance` | various | All 10 ranking features |
+
+**`user_interaction.json`** — 18 fields covering all interaction types:
+
+| Interaction Type | Tracked Fields |
+|---|---|
+| `FEED_CLICK` | target_id, target_type |
+| `REACTION` | target_id, content_author_id, reaction_type |
+| `COMMENT` | target_id, content_author_id |
+| `MESSAGE_SENT` | target_id (conversation), message_has_attachment |
+| `SEARCH` | search_query, search_result_count |
+| `PROFILE_VIEW` | target_id (viewed user) |
+| `BOT_INTERACTION` | bot_context, bot_tools_used, bot_response_time_ms |
+| `POLL_VOTE` | target_id (poll) |
+
+### 11.3 Code-Generated Loggers
+
+The structured-logger code generator reads `log-configs/*.json` and produces Java classes:
+
+- **`FeedImpressionLogger`** — wraps a Kafka producer; `log(timestamp, eventDate, userId, postId, ...)` with type-safe parameters matching the schema
+- **`UserInteractionLogger`** — same pattern for user interactions
+
+Each logger serializes events into a JSON envelope:
+```json
+{
+  "_log_type": "feed_impression",
+  "_log_class": "FeedImpression",
+  "_version": "1.0.0",
+  "data": { ... all fields ... }
+}
+```
+
+`AnalyticsService` wraps both loggers with fire-and-forget semantics. Logging failures are caught and logged at DEBUG level — they never affect the user request.
+
+### 11.4 Kafka Configuration
+
+Kafka runs on the host (Homebrew) with two listeners:
+
+| Listener | Port | Advertised As | Used By |
+|---|---|---|---|
+| `PLAINTEXT` | 9092 | `localhost:9092` | Social app, CLI tools |
+| `DOCKER` | 29092 | `host.docker.internal:29092` | Spark consumer, other containers |
+
+This dual-listener setup solves the Docker-to-host connectivity problem on macOS where containers cannot reach `localhost`.
+
+### 11.5 Data Warehouse Services
+
+All managed via `docker-compose.data-warehouse.yml`:
+
+| Service | Container | Port | Purpose |
+|---|---|---|---|
+| MinIO | `ws-minio` | 9000/9001 | S3-compatible object storage for Iceberg |
+| Hive Postgres | `ws-hive-postgres` | 5433 | Metadata store for Hive Metastore |
+| Hive Metastore | `ws-hive-metastore` | 9083 | Iceberg catalog (Thrift) |
+| Trino | `ws-trino` | 8081 | SQL query engine |
+| Spark Consumer | `ws-spark-consumer` | — | Kafka → Iceberg streaming |
+
+```bash
+# Start the full warehouse
+docker compose -f docker-compose.data-warehouse.yml up -d
+
+# Verify
+docker exec ws-trino trino --execute \
+  "SELECT count(*) FROM iceberg.worksphere.feedimpression"
+```
+
+### 11.6 Spark Consumer
+
+`docker/spark-consumer/consumer.py` reads all JSON configs from `log-configs/`, creates corresponding Iceberg tables, and starts Spark Structured Streaming queries.
+
+Key configuration:
+- **Warehouse location:** `s3a://warehouse/worksphere` (Iceberg namespace on MinIO)
+- **Kafka bootstrap:** `host.docker.internal:29092` (Docker listener)
+- **Micro-batch interval:** 30 seconds
+- **Checkpoint:** persistent Docker volume for exactly-once delivery
+
+The consumer dynamically adapts to schema changes — add a new JSON config file and restart the container.
+
+---
+
+## 12. AOEE Integration Deep Dive
 
 AOEE (Attribute Object Enterprise Edition) is used as a **vanilla, unmodified dependency** — fetched from GitHub at build time with zero source code changes. The social platform integrates with it through two complementary patterns:
 
-### 9.1 Integration Architecture
+### 12.1 Integration Architecture
 
 ```mermaid
 graph TB
@@ -479,7 +892,7 @@ graph TB
     PC --> DB
 ```
 
-### 9.2 Pattern 1: Social Platform as AOEE Client
+### 12.2 Pattern 1: Social Platform as AOEE Client
 
 `AoeeGraphClient.java` is a Spring `RestClient` wrapper that calls AOEE's native REST proxy API. All methods include graceful degradation — they catch exceptions and return empty results so the platform works even when AOEE is unavailable.
 
@@ -506,7 +919,7 @@ graph TB
 | `union(id1, id2, type)` | `POST /api/query/union` | Set union |
 | `getStats()` | `GET /api/stats` | Cache statistics |
 
-### 9.3 Pattern 2: Social Platform as AOEE Persistence Backend
+### 12.3 Pattern 2: Social Platform as AOEE Persistence Backend
 
 When AOEE is configured with `AOEE_STORAGE_TYPE=http`, the Rust server calls back to the social platform to persist edges. `AoeePersistenceController.java` exposes the REST API that AOEE expects at `/api/v1/`:
 
@@ -539,7 +952,7 @@ sequenceDiagram
 | `POST /api/v1/entities/batch` | Batch persist entities |
 | `GET /api/v1/export/stats` | Graph statistics |
 
-### 9.4 Event-Driven Sync
+### 12.4 Event-Driven Sync
 
 `GraphSyncService` listens to Spring application events and syncs to AOEE asynchronously:
 
@@ -569,14 +982,14 @@ flowchart LR
 
 All sync operations are `@Async` to avoid blocking the main request thread. If AOEE is unavailable, errors are logged but the main operation succeeds.
 
-### 9.5 Backfill
+### 12.5 Backfill
 
 The admin Graph Explorer includes a **"Load DB into AOEE"** button (`POST /api/admin/graph/backfill`) that reads all follows, reactions, posts, and memberships from PostgreSQL and pushes them to AOEE. This is used when:
 - AOEE is started fresh (in-memory cache is empty)
 - Data was generated before AOEE was running
 - AOEE was restarted and lost its cache
 
-### 9.6 Configuration
+### 12.6 Configuration
 
 ```yaml
 # application.yml
@@ -597,7 +1010,7 @@ aoee-server:
     AOEE_WRITE_THROUGH: "false"      # "true" to persist via HTTP
 ```
 
-### 9.7 Graceful Degradation
+### 12.7 Graceful Degradation
 
 Every `AoeeGraphClient` method wraps calls in try/catch and returns safe defaults:
 - `getNeighbors()` → empty list

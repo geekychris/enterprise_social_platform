@@ -12,9 +12,12 @@ import com.social.core.dto.MessageDto;
 import com.social.core.dto.UserSummaryDto;
 import com.social.core.id.GlobalIdGenerator;
 import com.social.core.id.ObjectType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,25 +27,33 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class ConversationService {
 
+    private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
+
     private final ConversationRepository conversationRepository;
     private final ConversationParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
     private final MessageService messageService;
     private final UserRepository userRepository;
     private final GlobalIdGenerator idGenerator;
+    private final UnreadCountService unreadCountService;
+    private final CacheService cacheService;
 
     public ConversationService(ConversationRepository conversationRepository,
                                ConversationParticipantRepository participantRepository,
                                MessageRepository messageRepository,
                                MessageService messageService,
                                UserRepository userRepository,
-                               GlobalIdGenerator idGenerator) {
+                               GlobalIdGenerator idGenerator,
+                               UnreadCountService unreadCountService,
+                               CacheService cacheService) {
         this.conversationRepository = conversationRepository;
         this.participantRepository = participantRepository;
         this.messageRepository = messageRepository;
         this.messageService = messageService;
         this.userRepository = userRepository;
         this.idGenerator = idGenerator;
+        this.unreadCountService = unreadCountService;
+        this.cacheService = cacheService;
     }
 
     /**
@@ -79,6 +90,18 @@ public class ConversationService {
             }
         }
 
+        // Ensure unread count records for all participants
+        try {
+            unreadCountService.ensureRecord(conversation.getId(), creatorId);
+            for (Long participantId : participantIds) {
+                if (!participantId.equals(creatorId)) {
+                    unreadCountService.ensureRecord(conversation.getId(), participantId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to ensure unread count records for conversation {}: {}", conversation.getId(), e.getMessage());
+        }
+
         return conversation;
     }
 
@@ -91,7 +114,18 @@ public class ConversationService {
                 .orElseGet(() -> create(user1, List.of(user2), null));
     }
 
+    @SuppressWarnings("unchecked")
     public List<ConversationDto> getConversationsForUser(long userId) {
+        String cacheKey = "convList:" + userId;
+        try {
+            List<ConversationDto> cached = (List<ConversationDto>) cacheService.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read conversation list from cache for user {}: {}", userId, e.getMessage());
+        }
+
         List<ConversationEntity> conversations = conversationRepository.findUserConversations(userId);
         List<ConversationDto> result = new ArrayList<>();
 
@@ -117,6 +151,12 @@ public class ConversationService {
                     unreadCount,
                     conv.getCreatedAt()
             ));
+        }
+
+        try {
+            cacheService.put(cacheKey, result, Duration.ofSeconds(10));
+        } catch (Exception e) {
+            log.warn("Failed to cache conversation list for user {}: {}", userId, e.getMessage());
         }
 
         return result;
@@ -192,6 +232,11 @@ public class ConversationService {
     public void markRead(long conversationId, long userId) {
         verifyParticipant(conversationId, userId);
         participantRepository.updateLastReadAt(conversationId, userId, Instant.now());
+        try {
+            unreadCountService.resetUnread(conversationId, userId);
+        } catch (Exception e) {
+            log.warn("Failed to reset unread count for conversation {} user {}: {}", conversationId, userId, e.getMessage());
+        }
     }
 
     public ConversationParticipantEntity verifyParticipant(long conversationId, long userId) {
@@ -215,6 +260,12 @@ public class ConversationService {
             participant.setVisibleFrom(Instant.now());
         }
         participantRepository.save(participant);
+
+        try {
+            unreadCountService.ensureRecord(conversationId, userId);
+        } catch (Exception e) {
+            log.warn("Failed to ensure unread count record for conversation {} user {}: {}", conversationId, userId, e.getMessage());
+        }
     }
 
     private UserSummaryDto getUserSummary(long userId) {

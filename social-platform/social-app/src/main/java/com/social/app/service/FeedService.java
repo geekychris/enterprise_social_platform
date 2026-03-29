@@ -7,6 +7,7 @@ import com.social.app.persistence.entity.PostEntity;
 import com.social.app.persistence.repository.FollowRepository;
 import com.social.app.persistence.repository.MembershipRepository;
 import com.social.app.persistence.repository.PageMembershipRepository;
+import com.social.app.service.AnalyticsService.FeedFeatures;
 import com.social.core.dto.FeedResponse;
 import com.social.core.dto.PostDto;
 import com.social.core.model.Visibility;
@@ -39,17 +40,23 @@ public class FeedService {
     private final PageMembershipRepository pageMembershipRepository;
     private final PostService postService;
     private final RecommendationService recommendationService;
+    private final AnalyticsService analyticsService;
+    private final FeedFeatureExtractor feedFeatureExtractor;
 
     public FeedService(FollowRepository followRepository,
                        MembershipRepository membershipRepository,
                        PageMembershipRepository pageMembershipRepository,
                        PostService postService,
-                       RecommendationService recommendationService) {
+                       RecommendationService recommendationService,
+                       AnalyticsService analyticsService,
+                       FeedFeatureExtractor feedFeatureExtractor) {
         this.followRepository = followRepository;
         this.membershipRepository = membershipRepository;
         this.pageMembershipRepository = pageMembershipRepository;
         this.postService = postService;
         this.recommendationService = recommendationService;
+        this.analyticsService = analyticsService;
+        this.feedFeatureExtractor = feedFeatureExtractor;
     }
 
     public FeedResponse assembleFeed(long userId, Long cursor, int limit) {
@@ -119,6 +126,42 @@ public class FeedService {
 
         // Interleave: insert a recommended post every RECOMMENDATION_INTERVAL organic posts
         List<PostDto> finalFeed = interleave(organicPosts, recommendations, userId);
+
+        // Log feed impressions with extracted features (fire-and-forget)
+        try {
+            Set<Long> followedSet = new HashSet<>(followedUserIds);
+            // Build author affinity map: count of viewer's reactions to each author's posts
+            Map<Long, Integer> authorAffinityMap = new HashMap<>();
+            // Build PostEntity lookup for feature extraction
+            Map<Long, PostEntity> postEntityMap = new HashMap<>();
+            for (PostEntity p : organicPosts) {
+                postEntityMap.put(p.getId(), p);
+            }
+            for (RecommendationService.ScoredPost sp : recommendations) {
+                postEntityMap.put(sp.post().getId(), sp.post());
+            }
+
+            for (int i = 0; i < finalFeed.size(); i++) {
+                PostDto dto = finalFeed.get(i);
+                PostEntity entity = postEntityMap.get(dto.id());
+                if (entity == null) continue;
+
+                FeedFeatures features = feedFeatureExtractor.extractFeatures(
+                        entity, userId, followedSet, authorAffinityMap);
+                if (dto.recommended()) {
+                    features.isRecommended = true;
+                }
+                double score = feedFeatureExtractor.computeScore(features);
+                String source = dto.recommended() ? "recommended" : "organic";
+                String targetType = dto.targetType() != null ? dto.targetType().name() : null;
+
+                analyticsService.logFeedImpression(
+                        userId, dto.id(), dto.author().id(), i, score, source,
+                        targetType, dto.targetId(), features);
+            }
+        } catch (Exception e) {
+            log.debug("Failed to log feed impressions: {}", e.getMessage());
+        }
 
         // Determine pagination cursor from the last organic post
         boolean hasMore = filteredPosts.size() > organicLimit;

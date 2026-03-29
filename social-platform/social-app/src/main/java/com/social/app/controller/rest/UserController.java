@@ -2,9 +2,12 @@ package com.social.app.controller.rest;
 
 import com.social.app.persistence.entity.FollowEntity;
 import com.social.app.persistence.repository.FollowRepository;
+import com.social.app.service.AnalyticsService;
 import com.social.app.service.UserService;
 import com.social.core.dto.UserDto;
 import com.social.core.dto.UserSummaryDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,20 +19,39 @@ import org.springframework.security.core.Authentication;
 @RequestMapping("/api/users")
 public class UserController {
 
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
+
     private final UserService userService;
     private final FollowRepository followRepository;
+    private final AnalyticsService analyticsService;
 
-    public UserController(UserService userService, FollowRepository followRepository) {
+    public UserController(UserService userService, FollowRepository followRepository,
+                          AnalyticsService analyticsService) {
         this.userService = userService;
         this.followRepository = followRepository;
+        this.analyticsService = analyticsService;
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserDto> getUser(@PathVariable long id) {
-        return userService.getById(id)
+    public ResponseEntity<UserDto> getUser(@PathVariable long id, Authentication auth) {
+        var result = userService.getById(id)
                 .map(userService::toDto)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+
+        // Log profile view analytics when viewing another user's profile (fire-and-forget)
+        try {
+            if (auth != null) {
+                long viewerId = (Long) auth.getPrincipal();
+                if (viewerId != id) {
+                    analyticsService.logProfileView(viewerId, id);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to log profile view analytics: {}", e.getMessage());
+        }
+
+        return result;
     }
 
     @GetMapping("/search")

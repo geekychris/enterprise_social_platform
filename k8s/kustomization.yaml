@@ -7,8 +7,12 @@ resources:
   - namespace.yaml
   - secrets.yaml
   - postgres.yaml
+  - redis.yaml
+  - kafka.yaml
   - opensearch.yaml
+  - ollama.yaml
   - aoee.yaml
   - social-app.yaml
+  - data-warehouse.yaml
   - frontend.yaml
   - ingress.yaml

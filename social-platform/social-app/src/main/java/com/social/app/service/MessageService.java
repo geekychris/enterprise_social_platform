@@ -10,6 +10,8 @@ import com.social.core.dto.MessageDto;
 import com.social.core.dto.UserSummaryDto;
 import com.social.core.id.GlobalIdGenerator;
 import com.social.core.id.ObjectType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,25 +25,39 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class MessageService {
 
+    private static final Logger log = LoggerFactory.getLogger(MessageService.class);
+
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final AttachmentRepository attachmentRepository;
     private final AttachmentService attachmentService;
     private final GlobalIdGenerator idGenerator;
     private final JdbcTemplate jdbc;
+    private final ConversationSummaryService conversationSummaryService;
+    private final UnreadCountService unreadCountService;
+    private final MessageBroadcastService messageBroadcastService;
+    private final EventPublisher eventPublisher;
 
     public MessageService(MessageRepository messageRepository,
                           UserRepository userRepository,
                           AttachmentRepository attachmentRepository,
                           AttachmentService attachmentService,
                           GlobalIdGenerator idGenerator,
-                          JdbcTemplate jdbc) {
+                          JdbcTemplate jdbc,
+                          ConversationSummaryService conversationSummaryService,
+                          UnreadCountService unreadCountService,
+                          MessageBroadcastService messageBroadcastService,
+                          EventPublisher eventPublisher) {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.attachmentRepository = attachmentRepository;
         this.attachmentService = attachmentService;
         this.idGenerator = idGenerator;
         this.jdbc = jdbc;
+        this.conversationSummaryService = conversationSummaryService;
+        this.unreadCountService = unreadCountService;
+        this.messageBroadcastService = messageBroadcastService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -57,6 +73,28 @@ public class MessageService {
 
         if (attachmentIds != null && !attachmentIds.isEmpty()) {
             linkAttachments(saved.getId(), attachmentIds);
+        }
+
+        // Scalability service integrations - fail gracefully
+        try {
+            conversationSummaryService.updateSummary(conversationId, saved.getId(), senderId, content, saved.getCreatedAt());
+        } catch (Exception e) {
+            log.warn("Failed to update conversation summary for conversation {}: {}", conversationId, e.getMessage());
+        }
+        try {
+            unreadCountService.incrementUnread(conversationId, senderId);
+        } catch (Exception e) {
+            log.warn("Failed to increment unread count for conversation {}: {}", conversationId, e.getMessage());
+        }
+        try {
+            messageBroadcastService.broadcastMessage(toDto(saved), conversationId);
+        } catch (Exception e) {
+            log.warn("Failed to broadcast message for conversation {}: {}", conversationId, e.getMessage());
+        }
+        try {
+            eventPublisher.publishMessageSent(conversationId, senderId, saved.getId(), content);
+        } catch (Exception e) {
+            log.warn("Failed to publish message sent event for conversation {}: {}", conversationId, e.getMessage());
         }
 
         return saved;

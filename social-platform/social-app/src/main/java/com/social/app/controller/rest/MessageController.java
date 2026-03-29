@@ -4,8 +4,11 @@ import com.social.app.persistence.entity.ConversationEntity;
 import com.social.app.service.BotService;
 import com.social.app.service.ConversationService;
 import com.social.app.service.MessageService;
+import com.social.app.service.UnreadCountService;
 import com.social.core.dto.ConversationDto;
 import com.social.core.dto.MessageDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -21,14 +24,19 @@ import java.util.Map;
 @RequestMapping("/api/messages")
 public class MessageController {
 
+    private static final Logger log = LoggerFactory.getLogger(MessageController.class);
+
     private final MessageService messageService;
     private final ConversationService conversationService;
     private final BotService botService;
+    private final UnreadCountService unreadCountService;
 
-    public MessageController(MessageService messageService, ConversationService conversationService, BotService botService) {
+    public MessageController(MessageService messageService, ConversationService conversationService,
+                             BotService botService, UnreadCountService unreadCountService) {
         this.messageService = messageService;
         this.conversationService = conversationService;
         this.botService = botService;
+        this.unreadCountService = unreadCountService;
     }
 
     /**
@@ -94,7 +102,13 @@ public class MessageController {
     @GetMapping("/unread-count")
     public ResponseEntity<Map<String, Long>> getUnreadCount(Authentication auth) {
         long userId = (Long) auth.getPrincipal();
-        long count = messageService.getUnreadCount(userId);
+        long count;
+        try {
+            count = unreadCountService.getTotalUnread(userId);
+        } catch (Exception e) {
+            log.warn("Failed to get unread count from UnreadCountService for user {}, falling back to DB: {}", userId, e.getMessage());
+            count = messageService.getUnreadCount(userId);
+        }
         return ResponseEntity.ok(Map.of("unreadCount", count));
     }
 

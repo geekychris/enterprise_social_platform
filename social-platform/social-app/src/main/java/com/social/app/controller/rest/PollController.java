@@ -1,8 +1,11 @@
 package com.social.app.controller.rest;
 
 import com.social.app.persistence.repository.PollRepository;
+import com.social.app.service.AnalyticsService;
 import com.social.app.service.PollService;
 import com.social.core.dto.PollDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -15,12 +18,17 @@ import java.util.Map;
 @RequestMapping("/api/polls")
 public class PollController {
 
+    private static final Logger log = LoggerFactory.getLogger(PollController.class);
+
     private final PollService pollService;
     private final PollRepository pollRepository;
+    private final AnalyticsService analyticsService;
 
-    public PollController(PollService pollService, PollRepository pollRepository) {
+    public PollController(PollService pollService, PollRepository pollRepository,
+                          AnalyticsService analyticsService) {
         this.pollService = pollService;
         this.pollRepository = pollRepository;
+        this.analyticsService = analyticsService;
     }
 
     @PostMapping
@@ -46,6 +54,17 @@ public class PollController {
                                         Authentication auth) {
         long userId = (Long) auth.getPrincipal();
         pollService.vote(userId, pollId, List.of(request.optionIds()));
+
+        // Log analytics (fire-and-forget)
+        try {
+            long postId = pollRepository.findById(pollId)
+                    .map(p -> p.getPostId())
+                    .orElse(0L);
+            analyticsService.logPollVote(userId, pollId, postId);
+        } catch (Exception e) {
+            log.debug("Failed to log poll vote analytics: {}", e.getMessage());
+        }
+
         return ResponseEntity.ok(pollService.toDto(pollId, userId));
     }
 

@@ -5,8 +5,9 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { useAuth } from '../hooks/useAuth';
 import api from '../api/client';
 import OrgAdminTab from '../components/admin/OrgAdminTab';
+import MLPlaygroundTab from '../components/admin/MLPlaygroundTab';
 
-type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org';
+type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org' | 'ml';
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -15,6 +16,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'content', label: 'Content' },
   { key: 'groups-pages', label: 'Groups & Pages' },
   { key: 'org', label: 'Organization' },
+  { key: 'ml', label: 'ML Playground' },
   { key: 'graph', label: 'Graph Explorer' },
 ];
 
@@ -76,6 +78,7 @@ export default function AdminPage() {
       {activeTab === 'content' && <ContentTab />}
       {activeTab === 'groups-pages' && <GroupsPagesTab />}
       {activeTab === 'org' && <OrgAdminTab />}
+      {activeTab === 'ml' && <MLPlaygroundTab />}
       {activeTab === 'graph' && <GraphExplorerTab />}
     </div>
   );

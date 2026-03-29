@@ -5,12 +5,29 @@ metadata:
   namespace: worksphere
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "social-app"
+    nginx.ingress.kubernetes.io/enable-websocket: "true"
 spec:
   rules:
     - http:
         paths:
           - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: social-app
+                port:
+                  number: 8080
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: social-app
+                port:
+                  number: 8080
+          - path: /actuator
             pathType: Prefix
             backend:
               service:

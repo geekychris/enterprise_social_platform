@@ -46,13 +46,15 @@ public class BotService {
     private final ConversationParticipantRepository participantRepository;
     private final UserRepository userRepository;
     private final GlobalIdGenerator idGenerator;
+    private final AnalyticsService analyticsService;
 
     public BotService(OllamaService ollamaService, BotToolService toolService,
                       BotActionService actionService, BotMemoryService memoryService,
                       MessageService messageService, ConversationService conversationService,
                       ConversationRepository conversationRepository,
                       ConversationParticipantRepository participantRepository,
-                      UserRepository userRepository, GlobalIdGenerator idGenerator) {
+                      UserRepository userRepository, GlobalIdGenerator idGenerator,
+                      AnalyticsService analyticsService) {
         this.ollamaService = ollamaService;
         this.toolService = toolService;
         this.actionService = actionService;
@@ -63,6 +65,7 @@ public class BotService {
         this.participantRepository = participantRepository;
         this.userRepository = userRepository;
         this.idGenerator = idGenerator;
+        this.analyticsService = analyticsService;
     }
 
     public long getBotUserId() {
@@ -138,6 +141,8 @@ public class BotService {
     }
 
     private void generateAndSendResponse(long conversationId, long senderId, String userMessage) {
+        long startTimeMs = System.currentTimeMillis();
+
         // Gather context
         String systemPrompt = buildSystemPrompt();
         String context = gatherContext(conversationId, senderId, userMessage);
@@ -167,6 +172,16 @@ public class BotService {
         response = response.trim();
         if (!response.isEmpty()) {
             messageService.send(botUserId, conversationId, response, null);
+        }
+
+        // Log bot interaction analytics (fire-and-forget)
+        try {
+            long responseTimeMs = System.currentTimeMillis() - startTimeMs;
+            String contextSummary = userMessage != null && userMessage.length() > 100
+                    ? userMessage.substring(0, 100) : userMessage;
+            analyticsService.logBotInteraction(senderId, contextSummary, "ollama", responseTimeMs);
+        } catch (Exception e) {
+            log.debug("Failed to log bot interaction analytics: {}", e.getMessage());
         }
     }
 

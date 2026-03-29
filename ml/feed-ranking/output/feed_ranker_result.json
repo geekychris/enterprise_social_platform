@@ -1,0 +1,39 @@
+{
+  "model_name": "feed_ranker",
+  "auc_roc": 0.6392615558863189,
+  "auc_pr": 0.37351634107156134,
+  "n_train": 80000,
+  "n_test": 20000,
+  "n_features": 10,
+  "positive_rate": 0.26353999972343445,
+  "hyperparams": {
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "objective": "binary:logistic",
+    "eval_metric": "auc",
+    "tree_method": "hist",
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 5,
+    "gamma": 0.1,
+    "reg_alpha": 0.1,
+    "reg_lambda": 1.0,
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "feature_importance": {
+    "engagement": 0.07235720008611679,
+    "recency_hours": 0.12123732268810272,
+    "affinity": 0.05963527783751488,
+    "reaction_count": 0.04849604517221451,
+    "comment_count": 0.0577901154756546,
+    "author_followers": 0.05171281471848488,
+    "is_recommended": 0.10739776492118835,
+    "has_attachment": 0.18452541530132294,
+    "has_poll": 0.12688352167606354,
+    "social_distance": 0.16996455192565918
+  },
+  "training_time_s": 0.7282466888427734,
+  "passed_validation": false
+}

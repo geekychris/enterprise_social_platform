@@ -1,0 +1,40 @@
+{
+  "name": "FeedImpression",
+  "log_type": "feed_impression",
+  "version": "1.0.0",
+  "description": "Tracks posts shown in user feeds with ranking features",
+  "kafka": {
+    "topic": "worksphere-feed-impressions",
+    "partitions": 4,
+    "replication_factor": 1,
+    "retention_ms": 2592000000
+  },
+  "warehouse": {
+    "table_name": "analytics.feed_impressions",
+    "partition_by": ["event_date"],
+    "sort_by": ["timestamp", "user_id"],
+    "retention_days": 90
+  },
+  "fields": [
+    {"name": "timestamp", "type": "timestamp", "required": true, "description": "Event timestamp"},
+    {"name": "event_date", "type": "date", "required": true, "description": "Partition date"},
+    {"name": "user_id", "type": "long", "required": true, "description": "Viewing user ID"},
+    {"name": "post_id", "type": "long", "required": true, "description": "Post shown"},
+    {"name": "author_id", "type": "long", "required": true, "description": "Post author ID"},
+    {"name": "position", "type": "int", "required": true, "description": "Position in feed (0-indexed)"},
+    {"name": "score", "type": "double", "required": false, "description": "Ranking score"},
+    {"name": "source", "type": "string", "required": true, "description": "ORGANIC, RECOMMENDED, TRENDING"},
+    {"name": "target_type", "type": "string", "required": false, "description": "GROUP_FEED, PAGE_FEED, etc"},
+    {"name": "target_id", "type": "long", "required": false, "description": "Group/page ID"},
+    {"name": "feat_engagement", "type": "double", "required": false, "description": "Feature: engagement score"},
+    {"name": "feat_recency_hours", "type": "double", "required": false, "description": "Feature: hours since posted"},
+    {"name": "feat_affinity", "type": "double", "required": false, "description": "Feature: author affinity score"},
+    {"name": "feat_reaction_count", "type": "int", "required": false, "description": "Feature: total reactions"},
+    {"name": "feat_comment_count", "type": "int", "required": false, "description": "Feature: total comments"},
+    {"name": "feat_author_follower_count", "type": "int", "required": false, "description": "Feature: author's follower count"},
+    {"name": "feat_is_recommended", "type": "boolean", "required": false, "description": "Feature: is recommended post"},
+    {"name": "feat_has_attachment", "type": "boolean", "required": false, "description": "Feature: has image/video"},
+    {"name": "feat_has_poll", "type": "boolean", "required": false, "description": "Feature: has poll"},
+    {"name": "feat_social_distance", "type": "int", "required": false, "description": "Feature: 1=following, 2=FOF, 3=other"}
+  ]
+}

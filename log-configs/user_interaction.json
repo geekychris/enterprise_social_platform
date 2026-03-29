@@ -1,0 +1,38 @@
+{
+  "name": "UserInteraction",
+  "log_type": "user_interaction",
+  "version": "1.0.0",
+  "description": "Tracks all user interactions: clicks, reactions, comments, messages, searches, profile views",
+  "kafka": {
+    "topic": "worksphere-user-interactions",
+    "partitions": 4,
+    "replication_factor": 1,
+    "retention_ms": 2592000000
+  },
+  "warehouse": {
+    "table_name": "analytics.user_interactions",
+    "partition_by": ["event_date", "interaction_type"],
+    "sort_by": ["timestamp", "user_id"],
+    "retention_days": 180
+  },
+  "fields": [
+    {"name": "timestamp", "type": "timestamp", "required": true, "description": "Event timestamp"},
+    {"name": "event_date", "type": "date", "required": true, "description": "Partition date"},
+    {"name": "user_id", "type": "long", "required": true, "description": "User performing action"},
+    {"name": "interaction_type", "type": "string", "required": true, "description": "FEED_CLICK, REACTION, COMMENT, MESSAGE_SENT, SEARCH, PROFILE_VIEW, BOT_INTERACTION, POLL_VOTE"},
+    {"name": "target_id", "type": "long", "required": false, "description": "Target entity ID (post, user, conversation)"},
+    {"name": "target_type", "type": "string", "required": false, "description": "POST, USER, CONVERSATION, GROUP, PAGE"},
+    {"name": "content_author_id", "type": "long", "required": false, "description": "Author of the content interacted with"},
+    {"name": "reaction_type", "type": "string", "required": false, "description": "LIKE, LOVE, HAHA, etc (for reactions)"},
+    {"name": "search_query", "type": "string", "required": false, "description": "Search query text"},
+    {"name": "search_result_count", "type": "int", "required": false, "description": "Number of search results"},
+    {"name": "message_has_attachment", "type": "boolean", "required": false, "description": "Message had attachment"},
+    {"name": "bot_context", "type": "string", "required": false, "description": "Bot interaction context"},
+    {"name": "bot_tools_used", "type": "string", "required": false, "description": "Comma-separated bot tools"},
+    {"name": "bot_response_time_ms", "type": "long", "required": false, "description": "Bot response latency"},
+    {"name": "group_id", "type": "long", "required": false, "description": "Group context if applicable"},
+    {"name": "page_id", "type": "long", "required": false, "description": "Page context if applicable"},
+    {"name": "device_type", "type": "string", "required": false, "description": "web, ios, android"},
+    {"name": "properties", "type": "map<string,string>", "required": false, "description": "Additional properties"}
+  ]
+}

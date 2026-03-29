@@ -1,10 +1,14 @@
 package com.social.app.controller.rest;
 
 import com.social.app.graph.AoeeGraphClient;
+import com.social.app.service.AnalyticsService;
+import com.social.app.service.PostService;
 import com.social.app.service.ReactionService;
 import com.social.core.dto.ReactorDto;
 import com.social.core.id.GlobalId;
 import com.social.core.id.ObjectType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -16,12 +20,19 @@ import java.util.Map;
 @RequestMapping("/api/reactions")
 public class ReactionController {
 
+    private static final Logger log = LoggerFactory.getLogger(ReactionController.class);
+
     private final ReactionService reactionService;
     private final AoeeGraphClient aoeeGraphClient;
+    private final AnalyticsService analyticsService;
+    private final PostService postService;
 
-    public ReactionController(ReactionService reactionService, AoeeGraphClient aoeeGraphClient) {
+    public ReactionController(ReactionService reactionService, AoeeGraphClient aoeeGraphClient,
+                              AnalyticsService analyticsService, PostService postService) {
         this.reactionService = reactionService;
         this.aoeeGraphClient = aoeeGraphClient;
+        this.analyticsService = analyticsService;
+        this.postService = postService;
     }
 
     @PostMapping
@@ -42,6 +53,17 @@ public class ReactionController {
         }
 
         var reaction = reactionService.react(userId, targetId, targetType, reactionType);
+
+        // Log analytics (fire-and-forget)
+        try {
+            long authorId = postService.getById(targetId)
+                    .map(p -> p.getAuthorId())
+                    .orElse(0L);
+            analyticsService.logReaction(userId, targetId, authorId, reactionType);
+        } catch (Exception e) {
+            log.debug("Failed to log reaction analytics: {}", e.getMessage());
+        }
+
         return ResponseEntity.ok(Map.of(
                 "id", reaction.getId(),
                 "targetId", reaction.getTargetId(),

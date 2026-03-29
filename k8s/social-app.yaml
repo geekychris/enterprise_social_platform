@@ -71,6 +71,18 @@ spec:
                 secretKeyRef:
                   name: worksphere-secrets
                   key: jwt-secret
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: KAFKA_SERVERS
+              value: "kafka:9092"
+            - name: SOCIAL_AI_OLLAMA_URL
+              value: "http://ollama:11434"
+            - name: SOCIAL_AI_MODEL
+              value: "llama3.2:latest"
+            - name: WORKSPHERE_NODE_ID
+              value: "1"
           volumeMounts:
             - name: uploads
               mountPath: /data/uploads

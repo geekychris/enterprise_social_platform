@@ -2,6 +2,15 @@ server:
   port: 8080
 
 spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    consumer:
+      group-id: worksphere
+      auto-offset-reset: latest
   datasource:
     url: jdbc:postgresql://localhost:5432/social_enterprise
     username: social
@@ -55,3 +64,15 @@ social:
       enabled: ${SOCIAL_BOT_DIGEST_ENABLED:true}
       cron: ${SOCIAL_BOT_DIGEST_CRON:0 0 8 * * *}
       lookback-hours: ${SOCIAL_BOT_DIGEST_LOOKBACK:12}
+
+worksphere:
+  node-id: ${WORKSPHERE_NODE_ID:1}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,prometheus
+  metrics:
+    tags:
+      application: worksphere

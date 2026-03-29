@@ -1,10 +1,13 @@
 package com.social.app.controller.rest;
 
+import com.social.app.service.AnalyticsService;
 import com.social.app.service.CommentService;
 import com.social.app.service.NotificationService;
 import com.social.app.service.PostService;
 import com.social.core.dto.CommentDto;
 import com.social.core.dto.CreateCommentRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -16,16 +19,21 @@ import java.util.Map;
 @RequestMapping("/api/comments")
 public class CommentController {
 
+    private static final Logger log = LoggerFactory.getLogger(CommentController.class);
+
     private final CommentService commentService;
     private final NotificationService notificationService;
     private final PostService postService;
+    private final AnalyticsService analyticsService;
 
     public CommentController(CommentService commentService,
                              NotificationService notificationService,
-                             PostService postService) {
+                             PostService postService,
+                             AnalyticsService analyticsService) {
         this.commentService = commentService;
         this.notificationService = notificationService;
         this.postService = postService;
+        this.analyticsService = analyticsService;
     }
 
     @PostMapping
@@ -53,6 +61,14 @@ public class CommentController {
         var post = postService.getById(postId);
         if (post.isPresent() && post.get().getAuthorId() != userId) {
             notificationService.notifyComment(post.get().getAuthorId(), userId, postId);
+        }
+
+        // Log analytics (fire-and-forget)
+        try {
+            long authorId = post.map(p -> p.getAuthorId()).orElse(0L);
+            analyticsService.logComment(userId, postId, authorId);
+        } catch (Exception e) {
+            log.debug("Failed to log comment analytics: {}", e.getMessage());
         }
 
         return ResponseEntity.ok(commentService.toDto(entity));

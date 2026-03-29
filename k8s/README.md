@@ -81,6 +81,24 @@ Then visit: http://worksphere.local
 
 Both use `hostPath` volumes with `Retain` reclaim policy — data persists across pod restarts and redeployments.
 
+## Services
+
+| Service | Image | Port | Purpose |
+|---------|-------|------|---------|
+| PostgreSQL | postgres:16 | 5432 | Primary database |
+| Redis | redis:7-alpine | 6379 | Caching (L2), Pub/Sub for WebSocket broadcast, feed sorted sets |
+| Kafka | bitnami/kafka:3.7 | 9092 | Event streaming (message events, feed fan-out, reactions) |
+| OpenSearch | opensearchproject/opensearch:2 | 9200 | Full-text search |
+| Ollama | ollama/ollama | 11434 | AI/LLM for Roid bot and summarization |
+| AOEE | worksphere/aoee-server + proxy | 50051/8082 | Social graph engine |
+| social-app | worksphere/social-app | 8080 | Main API + WebSocket gateway |
+| frontend | worksphere/frontend | 80 | React web UI |
+
+## WebSocket
+
+The social-app exposes a STOMP WebSocket endpoint at `/ws` for real-time messaging.
+The ingress is configured with WebSocket support (long timeouts, upgrade headers).
+
 ## Scaling
 
 ```bash
