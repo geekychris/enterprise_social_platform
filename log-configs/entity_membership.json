@@ -1,0 +1,29 @@
+{
+  "name": "EntityMembership",
+  "log_type": "entity_membership",
+  "version": "1.0.0",
+  "description": "CDC events for group membership changes",
+  "kafka": {
+    "topic": "worksphere-entity-memberships",
+    "partitions": 4,
+    "replication_factor": 1,
+    "retention_ms": 2592000000
+  },
+  "warehouse": {
+    "table_name": "warehouse.memberships_hourly",
+    "partition_by": ["event_hour"],
+    "sort_by": ["event_timestamp", "user_id"],
+    "retention_days": 90
+  },
+  "fields": [
+    {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+    {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+    {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+    {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+    {"name": "user_id", "type": "long", "required": true, "description": "Member user ID"},
+    {"name": "group_id", "type": "long", "required": true, "description": "Group ID"},
+    {"name": "role", "type": "string", "required": false, "description": "Membership role (admin, member, etc)"},
+    {"name": "status", "type": "string", "required": false, "description": "Membership status (active, pending, etc)"},
+    {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+  ]
+}

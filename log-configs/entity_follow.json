@@ -1,0 +1,27 @@
+{
+  "name": "EntityFollow",
+  "log_type": "entity_follow",
+  "version": "1.0.0",
+  "description": "CDC events for follow relationship changes",
+  "kafka": {
+    "topic": "worksphere-entity-follows",
+    "partitions": 4,
+    "replication_factor": 1,
+    "retention_ms": 2592000000
+  },
+  "warehouse": {
+    "table_name": "warehouse.follows_hourly",
+    "partition_by": ["event_hour"],
+    "sort_by": ["event_timestamp", "follower_id"],
+    "retention_days": 90
+  },
+  "fields": [
+    {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+    {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+    {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+    {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+    {"name": "follower_id", "type": "long", "required": true, "description": "Follower user ID"},
+    {"name": "followed_id", "type": "long", "required": true, "description": "Followed user ID"},
+    {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+  ]
+}

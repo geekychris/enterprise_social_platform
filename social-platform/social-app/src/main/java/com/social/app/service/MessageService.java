@@ -37,6 +37,7 @@ public class MessageService {
     private final UnreadCountService unreadCountService;
     private final MessageBroadcastService messageBroadcastService;
     private final EventPublisher eventPublisher;
+    private final EntityEventService entityEventService;
 
     public MessageService(MessageRepository messageRepository,
                           UserRepository userRepository,
@@ -47,7 +48,8 @@ public class MessageService {
                           ConversationSummaryService conversationSummaryService,
                           UnreadCountService unreadCountService,
                           MessageBroadcastService messageBroadcastService,
-                          EventPublisher eventPublisher) {
+                          EventPublisher eventPublisher,
+                          EntityEventService entityEventService) {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.attachmentRepository = attachmentRepository;
@@ -58,6 +60,7 @@ public class MessageService {
         this.unreadCountService = unreadCountService;
         this.messageBroadcastService = messageBroadcastService;
         this.eventPublisher = eventPublisher;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -95,6 +98,13 @@ public class MessageService {
             eventPublisher.publishMessageSent(conversationId, senderId, saved.getId(), content);
         } catch (Exception e) {
             log.warn("Failed to publish message sent event for conversation {}: {}", conversationId, e.getMessage());
+        }
+        try {
+            boolean hasAttachment = attachmentIds != null && !attachmentIds.isEmpty();
+            entityEventService.publishMessageEvent("CREATE", saved.getId(), saved.getConversationId(),
+                saved.getSenderId(), content != null ? content.length() : 0, hasAttachment, saved.getCreatedAt());
+        } catch (Exception e) {
+            log.warn("Failed to publish entity message event: {}", e.getMessage());
         }
 
         return saved;

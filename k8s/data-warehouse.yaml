@@ -186,8 +186,7 @@ spec:
     spec:
       containers:
         - name: spark-consumer
-          image: bitnami/spark:3.5
-          command: ["/bin/bash", "-c", "echo 'Spark consumer placeholder - configure with structured-logger spark-consumer job'; sleep infinity"]
+          image: worksphere/spark-consumer:latest
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"
@@ -199,6 +198,18 @@ spec:
               value: "minioadmin"
             - name: HIVE_METASTORE_URI
               value: "thrift://hive-metastore:9083"
+            - name: CONFIG_DIR
+              value: "/opt/spark-apps/log-configs"
+            - name: CHECKPOINT_DIR
+              value: "/opt/spark-data/checkpoints"
+            - name: AWS_REGION
+              value: "us-east-1"
+          volumeMounts:
+            - name: log-configs
+              mountPath: /opt/spark-apps/log-configs
+              readOnly: true
+            - name: checkpoints
+              mountPath: /opt/spark-data/checkpoints
           resources:
             requests:
               memory: "1Gi"
@@ -206,3 +217,9 @@ spec:
             limits:
               memory: "2Gi"
               cpu: "1000m"
+      volumes:
+        - name: log-configs
+          configMap:
+            name: log-configs
+        - name: checkpoints
+          emptyDir: {}

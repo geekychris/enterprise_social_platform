@@ -1,0 +1,38 @@
+{
+  "name": "EntityUser",
+  "log_type": "entity_user",
+  "version": "1.0.0",
+  "description": "CDC events for user entity changes",
+  "kafka": {
+    "topic": "worksphere-entity-users",
+    "partitions": 4,
+    "replication_factor": 1,
+    "retention_ms": 2592000000
+  },
+  "warehouse": {
+    "table_name": "warehouse.users_hourly",
+    "partition_by": ["event_hour"],
+    "sort_by": ["event_timestamp", "id"],
+    "retention_days": 90
+  },
+  "fields": [
+    {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+    {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+    {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+    {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+    {"name": "id", "type": "long", "required": true, "description": "User ID"},
+    {"name": "username", "type": "string", "required": true, "description": "Username"},
+    {"name": "display_name", "type": "string", "required": false, "description": "Display name"},
+    {"name": "email", "type": "string", "required": false, "description": "Email"},
+    {"name": "avatar_url", "type": "string", "required": false, "description": "Avatar URL"},
+    {"name": "bio", "type": "string", "required": false, "description": "Bio text"},
+    {"name": "visibility", "type": "string", "required": false, "description": "PUBLIC, PRIVATE, etc"},
+    {"name": "is_admin", "type": "boolean", "required": false, "description": "Admin flag"},
+    {"name": "job_title", "type": "string", "required": false, "description": "Job title"},
+    {"name": "department", "type": "string", "required": false, "description": "Department"},
+    {"name": "manager_id", "type": "long", "required": false, "description": "Manager user ID"},
+    {"name": "location", "type": "string", "required": false, "description": "Location"},
+    {"name": "is_bot", "type": "boolean", "required": false, "description": "Bot flag"},
+    {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+  ]
+}

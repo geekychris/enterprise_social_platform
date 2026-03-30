@@ -4,6 +4,7 @@ import com.social.app.persistence.entity.FriendRequestEntity;
 import com.social.app.persistence.entity.FollowEntity;
 import com.social.app.persistence.repository.FriendRequestRepository;
 import com.social.app.persistence.repository.FollowRepository;
+import com.social.app.service.EntityEventService;
 import com.social.app.service.FollowEvent;
 import com.social.app.service.NotificationService;
 import com.social.app.service.UserService;
@@ -29,19 +30,22 @@ public class FriendRequestController {
     private final GlobalIdGenerator idGenerator;
     private final ApplicationEventPublisher eventPublisher;
     private final NotificationService notificationService;
+    private final EntityEventService entityEventService;
 
     public FriendRequestController(FriendRequestRepository friendRequestRepository,
                                     FollowRepository followRepository,
                                     UserService userService,
                                     GlobalIdGenerator idGenerator,
                                     ApplicationEventPublisher eventPublisher,
-                                    NotificationService notificationService) {
+                                    NotificationService notificationService,
+                                    EntityEventService entityEventService) {
         this.friendRequestRepository = friendRequestRepository;
         this.followRepository = followRepository;
         this.userService = userService;
         this.idGenerator = idGenerator;
         this.eventPublisher = eventPublisher;
         this.notificationService = notificationService;
+        this.entityEventService = entityEventService;
     }
 
     @PostMapping("/{targetId}")
@@ -165,8 +169,11 @@ public class FriendRequestController {
             var follow = new FollowEntity();
             follow.setFollowerId(followerId);
             follow.setFollowedId(followedId);
-            followRepository.save(follow);
+            FollowEntity saved = followRepository.save(follow);
             eventPublisher.publishEvent(new FollowEvent(followerId, followedId, true));
+            try {
+                entityEventService.publishFollowEvent("CREATE", followerId, followedId, saved.getCreatedAt());
+            } catch (Exception e) { /* don't affect main flow */ }
         }
     }
 

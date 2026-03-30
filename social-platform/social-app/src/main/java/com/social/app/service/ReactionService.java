@@ -32,6 +32,7 @@ public class ReactionService {
     private final GlobalIdGenerator idGenerator;
     private final ApplicationEventPublisher eventPublisher;
     private final CacheService cacheService;
+    private final EntityEventService entityEventService;
 
     public ReactionService(ReactionRepository reactionRepository,
                            FollowRepository followRepository,
@@ -39,7 +40,8 @@ public class ReactionService {
                            AoeeGraphClient aoeeGraphClient,
                            GlobalIdGenerator idGenerator,
                            ApplicationEventPublisher eventPublisher,
-                           CacheService cacheService) {
+                           CacheService cacheService,
+                           EntityEventService entityEventService) {
         this.reactionRepository = reactionRepository;
         this.followRepository = followRepository;
         this.userService = userService;
@@ -47,6 +49,7 @@ public class ReactionService {
         this.idGenerator = idGenerator;
         this.eventPublisher = eventPublisher;
         this.cacheService = cacheService;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -68,6 +71,10 @@ public class ReactionService {
 
         eventPublisher.publishEvent(new ReactionEvent(userId, targetId, reactionType, true));
         cacheService.evict("reactions:counts:" + targetId);
+        try {
+            entityEventService.publishReactionEvent("CREATE", saved.getId(), saved.getUserId(),
+                saved.getTargetId(), saved.getTargetType(), saved.getReactionType(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
         return saved;
     }
 
@@ -77,6 +84,10 @@ public class ReactionService {
             reactionRepository.delete(existing);
             eventPublisher.publishEvent(new ReactionEvent(userId, targetId, existing.getReactionType(), false));
             cacheService.evict("reactions:counts:" + targetId);
+            try {
+                entityEventService.publishReactionEvent("DELETE", existing.getId(), existing.getUserId(),
+                    existing.getTargetId(), existing.getTargetType(), existing.getReactionType(), existing.getCreatedAt());
+            } catch (Exception e) { /* don't affect main flow */ }
         });
     }
 

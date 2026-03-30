@@ -26,15 +26,18 @@ public class GroupService {
     private final MembershipRepository membershipRepository;
     private final UserRepository userRepository;
     private final GlobalIdGenerator idGenerator;
+    private final EntityEventService entityEventService;
 
     public GroupService(GroupRepository groupRepository,
                         MembershipRepository membershipRepository,
                         UserRepository userRepository,
-                        GlobalIdGenerator idGenerator) {
+                        GlobalIdGenerator idGenerator,
+                        EntityEventService entityEventService) {
         this.groupRepository = groupRepository;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
         this.idGenerator = idGenerator;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -54,7 +57,17 @@ public class GroupService {
         membership.setGroupId(saved.getId());
         membership.setRole("OWNER");
         membership.setStatus("APPROVED");
-        membershipRepository.save(membership);
+        MembershipEntity savedMembership = membershipRepository.save(membership);
+
+        try {
+            entityEventService.publishGroupEvent("CREATE", saved.getId(), saved.getName(),
+                saved.getDescription(), saved.getVisibility(), (long) userId, saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        try {
+            entityEventService.publishMembershipEvent("CREATE", savedMembership.getUserId(),
+                savedMembership.getGroupId(), savedMembership.getRole(), savedMembership.getStatus(),
+                savedMembership.getJoinedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
 
         return saved;
     }
@@ -88,12 +101,20 @@ public class GroupService {
             membership.setStatus("APPROVED");
         }
 
-        return membershipRepository.save(membership);
+        MembershipEntity saved = membershipRepository.save(membership);
+        try {
+            entityEventService.publishMembershipEvent("CREATE", saved.getUserId(), saved.getGroupId(),
+                saved.getRole(), saved.getStatus(), saved.getJoinedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     @Transactional
     public void leave(long userId, long groupId) {
         membershipRepository.deleteById(new MembershipEntity.MembershipId(userId, groupId));
+        try {
+            entityEventService.publishMembershipEvent("DELETE", userId, groupId, null, null, null);
+        } catch (Exception e) { /* don't affect main flow */ }
     }
 
     @Transactional
@@ -103,7 +124,12 @@ public class GroupService {
         MembershipEntity membership = membershipRepository.findByUserIdAndGroupId(userId, groupId)
                 .orElseThrow(() -> new IllegalArgumentException("Membership not found"));
         membership.setStatus("APPROVED");
-        return membershipRepository.save(membership);
+        MembershipEntity saved = membershipRepository.save(membership);
+        try {
+            entityEventService.publishMembershipEvent("UPDATE", saved.getUserId(), saved.getGroupId(),
+                saved.getRole(), saved.getStatus(), saved.getJoinedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     @Transactional
@@ -111,6 +137,9 @@ public class GroupService {
         verifyOwnerOrAdmin(ownerId, groupId);
 
         membershipRepository.deleteById(new MembershipEntity.MembershipId(userId, groupId));
+        try {
+            entityEventService.publishMembershipEvent("DELETE", userId, groupId, null, null, null);
+        } catch (Exception e) { /* don't affect main flow */ }
     }
 
     public Optional<MembershipDto> getMembership(long userId, long groupId) {
@@ -162,7 +191,12 @@ public class GroupService {
         if (description != null) group.setDescription(description);
         if (avatarUrl != null) group.setAvatarUrl(avatarUrl);
         if (coverUrl != null) group.setCoverUrl(coverUrl);
-        return groupRepository.save(group);
+        GroupEntity saved = groupRepository.save(group);
+        try {
+            entityEventService.publishGroupEvent("UPDATE", saved.getId(), saved.getName(),
+                saved.getDescription(), saved.getVisibility(), null, saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     @Transactional

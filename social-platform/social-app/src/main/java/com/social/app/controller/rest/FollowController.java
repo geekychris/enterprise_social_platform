@@ -2,6 +2,7 @@ package com.social.app.controller.rest;
 
 import com.social.app.persistence.entity.FollowEntity;
 import com.social.app.persistence.repository.FollowRepository;
+import com.social.app.service.EntityEventService;
 import com.social.app.service.FollowEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
@@ -14,11 +15,14 @@ public class FollowController {
 
     private final FollowRepository followRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final EntityEventService entityEventService;
 
     public FollowController(FollowRepository followRepository,
-                            ApplicationEventPublisher eventPublisher) {
+                            ApplicationEventPublisher eventPublisher,
+                            EntityEventService entityEventService) {
         this.followRepository = followRepository;
         this.eventPublisher = eventPublisher;
+        this.entityEventService = entityEventService;
     }
 
     @PostMapping("/{targetId}")
@@ -30,8 +34,11 @@ public class FollowController {
         var entity = new FollowEntity();
         entity.setFollowerId(userId);
         entity.setFollowedId(targetId);
-        followRepository.save(entity);
+        FollowEntity saved = followRepository.save(entity);
         eventPublisher.publishEvent(new FollowEvent(userId, targetId, true));
+        try {
+            entityEventService.publishFollowEvent("CREATE", userId, targetId, saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
         return ResponseEntity.ok().build();
     }
 
@@ -42,6 +49,9 @@ public class FollowController {
         if (followRepository.existsById(id)) {
             followRepository.deleteById(id);
             eventPublisher.publishEvent(new FollowEvent(userId, targetId, false));
+            try {
+                entityEventService.publishFollowEvent("DELETE", userId, targetId, null);
+            } catch (Exception e) { /* don't affect main flow */ }
         }
         return ResponseEntity.noContent().build();
     }

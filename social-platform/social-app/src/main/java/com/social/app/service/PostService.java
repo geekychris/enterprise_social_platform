@@ -43,6 +43,7 @@ public class PostService {
     private final UserService userService;
     private final JdbcTemplate jdbc;
     private final CacheService cacheService;
+    private final EntityEventService entityEventService;
 
     public PostService(PostRepository postRepository,
                        ReactionRepository reactionRepository,
@@ -55,7 +56,8 @@ public class PostService {
                        ApplicationEventPublisher eventPublisher,
                        UserService userService,
                        JdbcTemplate jdbc,
-                       CacheService cacheService) {
+                       CacheService cacheService,
+                       EntityEventService entityEventService) {
         this.postRepository = postRepository;
         this.pollRepository = pollRepository;
         this.pollService = pollService;
@@ -68,6 +70,7 @@ public class PostService {
         this.userService = userService;
         this.jdbc = jdbc;
         this.cacheService = cacheService;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -95,6 +98,12 @@ public class PostService {
                 saved.getId(), authorId,
                 saved.getTargetType(), saved.getTargetId()
         ));
+
+        try {
+            entityEventService.publishPostEvent("CREATE", saved.getId(), saved.getAuthorId(),
+                saved.getContent(), saved.getVisibility(), saved.getTargetType(),
+                saved.getTargetId(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
 
         return saved;
     }
@@ -177,6 +186,11 @@ public class PostService {
         entity.setContent(content);
         PostEntity saved = postRepository.save(entity);
         cacheService.evictPattern("post:" + entity.getId() + ":*");
+        try {
+            entityEventService.publishPostEvent("UPDATE", saved.getId(), saved.getAuthorId(),
+                saved.getContent(), saved.getVisibility(), saved.getTargetType(),
+                saved.getTargetId(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
         return saved;
     }
 
@@ -184,5 +198,8 @@ public class PostService {
     public void delete(long postId) {
         postRepository.deleteById(postId);
         cacheService.evictPattern("post:" + postId + ":*");
+        try {
+            entityEventService.publishPostEvent("DELETE", postId, 0, null, null, null, null, null);
+        } catch (Exception e) { /* don't affect main flow */ }
     }
 }

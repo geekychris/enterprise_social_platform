@@ -26,15 +26,18 @@ public class PageService {
     private final PageMembershipRepository pageMembershipRepository;
     private final UserRepository userRepository;
     private final GlobalIdGenerator idGenerator;
+    private final EntityEventService entityEventService;
 
     public PageService(PageRepository pageRepository,
                        PageMembershipRepository pageMembershipRepository,
                        UserRepository userRepository,
-                       GlobalIdGenerator idGenerator) {
+                       GlobalIdGenerator idGenerator,
+                       EntityEventService entityEventService) {
         this.pageRepository = pageRepository;
         this.pageMembershipRepository = pageMembershipRepository;
         this.userRepository = userRepository;
         this.idGenerator = idGenerator;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -57,6 +60,11 @@ public class PageService {
         membership.setRole("OWNER");
         membership.setStatus("APPROVED");
         pageMembershipRepository.save(membership);
+
+        try {
+            entityEventService.publishPageEvent("CREATE", saved.getId(), saved.getName(),
+                saved.getDescription(), saved.getVisibility(), saved.getOwnerId(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
 
         return saved;
     }
@@ -155,7 +163,12 @@ public class PageService {
         if (description != null) page.setDescription(description);
         if (avatarUrl != null) page.setAvatarUrl(avatarUrl);
         if (coverUrl != null) page.setCoverUrl(coverUrl);
-        return pageRepository.save(page);
+        PageEntity saved = pageRepository.save(page);
+        try {
+            entityEventService.publishPageEvent("UPDATE", saved.getId(), saved.getName(),
+                saved.getDescription(), saved.getVisibility(), saved.getOwnerId(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     @Transactional

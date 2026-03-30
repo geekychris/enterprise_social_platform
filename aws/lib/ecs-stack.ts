@@ -16,9 +16,18 @@ interface EcsStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
   database: rds.DatabaseInstance;
   uploadsBucket: s3.Bucket;
+  warehouseBucket: s3.Bucket;
   dbSecret: secretsmanager.ISecret;
   jwtSecret: secretsmanager.Secret;
   ecrRepos: EcrRepos;
+  redisEndpoint: string;
+  redisPort: string;
+  opensearchEndpoint: string;
+  kafkaBootstrap: string;
+  kafkaSecurityGroup: ec2.SecurityGroup;
+  redisSecurityGroup: ec2.SecurityGroup;
+  opensearchSecurityGroup: ec2.SecurityGroup;
+  glueDatabaseName: string;
 }
 
 export class EcsStack extends cdk.Stack {
@@ -28,16 +37,23 @@ export class EcsStack extends cdk.Stack {
     const appDesiredCount = this.node.tryGetContext('appDesiredCount') ?? 2;
     const frontendDesiredCount = this.node.tryGetContext('frontendDesiredCount') ?? 2;
 
-    // ECS Cluster
+    // ECS Cluster with Cloud Map namespace for service discovery
     const cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: props.vpc,
       clusterName: 'worksphere',
       containerInsights: true,
+      defaultCloudMapNamespace: { name: 'worksphere.local' },
     });
 
     // Log groups
     const appLogGroup = new logs.LogGroup(this, 'AppLogs', {
       logGroupName: '/worksphere/social-app',
+      retention: logs.RetentionDays.TWO_WEEKS,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const pipelineLogGroup = new logs.LogGroup(this, 'PipelineLogs', {
+      logGroupName: '/worksphere/pipeline',
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -105,12 +121,13 @@ export class EcsStack extends cdk.Stack {
     // ── Social App ───────────────────────────────────────────────
 
     const appTask = new ecs.FargateTaskDefinition(this, 'AppTask', {
-      memoryLimitMiB: 1024,
-      cpu: 512,
+      memoryLimitMiB: 2048,
+      cpu: 1024,
     });
 
-    // Grant S3 access for uploads
+    // Grant S3 access for media uploads + warehouse reads
     props.uploadsBucket.grantReadWrite(appTask.taskRole);
+    props.warehouseBucket.grantRead(appTask.taskRole);
 
     const dbUrl = `jdbc:postgresql://${props.database.dbInstanceEndpointAddress}:5432/social_enterprise`;
 
@@ -118,12 +135,27 @@ export class EcsStack extends cdk.Stack {
       image: ecs.ContainerImage.fromEcrRepository(props.ecrRepos.socialApp),
       portMappings: [{ containerPort: 8080 }],
       environment: {
+        // Database
         SPRING_DATASOURCE_URL: dbUrl,
+        // Redis
+        REDIS_HOST: props.redisEndpoint,
+        REDIS_PORT: props.redisPort,
+        // Kafka
+        KAFKA_SERVERS: props.kafkaBootstrap,
+        // OpenSearch (Amazon OpenSearch uses HTTPS on 443)
+        SOCIAL_OPENSEARCH_HOST: props.opensearchEndpoint,
+        SOCIAL_OPENSEARCH_PORT: '443',
+        // AOEE
         SOCIAL_AOEE_HOST: 'aoee-proxy.worksphere.local',
         SOCIAL_AOEE_PROXY_PORT: '8082',
-        SOCIAL_OPENSEARCH_HOST: 'opensearch.worksphere.local',
-        SOCIAL_OPENSEARCH_PORT: '9200',
-        SOCIAL_MEDIA_UPLOAD_DIR: '/data/uploads',
+        // S3 media storage (uses real S3, not MinIO)
+        S3_ENDPOINT: `https://s3.${this.region}.amazonaws.com`,
+        S3_BUCKET: props.uploadsBucket.bucketName,
+        S3_REGION: this.region!,
+        // No access key/secret needed — uses IAM task role
+        // AI (Ollama not available on AWS; use Bedrock or disable)
+        SOCIAL_AI_OLLAMA_URL: 'http://ollama.worksphere.local:11434',
+        // Security
         SOCIAL_AUTH_DEBUG_BYPASS: 'false',
       },
       secrets: {
@@ -137,7 +169,7 @@ export class EcsStack extends cdk.Stack {
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(10),
         retries: 3,
-        startPeriod: cdk.Duration.seconds(60),
+        startPeriod: cdk.Duration.seconds(90),
       },
     });
 
@@ -148,7 +180,74 @@ export class EcsStack extends cdk.Stack {
       cloudMapOptions: { name: 'social-app' },
     });
 
+    // Allow app to reach data services
     props.database.connections.allowFrom(appService, ec2.Port.tcp(5432));
+    props.redisSecurityGroup.addIngressRule(appService.connections.securityGroups[0], ec2.Port.tcp(6379));
+    props.kafkaSecurityGroup.addIngressRule(appService.connections.securityGroups[0], ec2.Port.tcp(9092));
+    props.opensearchSecurityGroup.addIngressRule(appService.connections.securityGroups[0], ec2.Port.tcp(443));
+
+    // ── Spark Consumer (Kafka → S3 Iceberg via Glue catalog) ────
+
+    const sparkTask = new ecs.FargateTaskDefinition(this, 'SparkConsumerTask', {
+      memoryLimitMiB: 4096,
+      cpu: 2048,
+    });
+
+    // Spark needs S3 + Glue access
+    props.warehouseBucket.grantReadWrite(sparkTask.taskRole);
+    sparkTask.taskRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSGlueServiceRole'),
+    );
+    (sparkTask.taskRole as iam.Role).addToPolicy(new iam.PolicyStatement({
+      actions: ['glue:*'],
+      resources: ['*'],
+    }));
+
+    sparkTask.addContainer('spark-consumer', {
+      image: ecs.ContainerImage.fromEcrRepository(props.ecrRepos.socialApp, 'spark-consumer'),
+      environment: {
+        KAFKA_BOOTSTRAP_SERVERS: props.kafkaBootstrap,
+        // Use Glue as Iceberg catalog instead of Hive Metastore
+        ICEBERG_CATALOG_TYPE: 'glue',
+        ICEBERG_WAREHOUSE: `s3://${props.warehouseBucket.bucketName}/iceberg/`,
+        GLUE_DATABASE: props.glueDatabaseName,
+        AWS_REGION: this.region!,
+        CONFIG_DIR: '/opt/spark-apps/log-configs',
+        CHECKPOINT_DIR: '/opt/spark-data/checkpoints',
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'spark-consumer', logGroup: pipelineLogGroup }),
+    });
+
+    const sparkService = new ecs.FargateService(this, 'SparkConsumerService', {
+      cluster,
+      taskDefinition: sparkTask,
+      desiredCount: 1,
+    });
+
+    props.kafkaSecurityGroup.addIngressRule(sparkService.connections.securityGroups[0], ec2.Port.tcp(9092));
+
+    // ── Ollama (optional — GPU instance for AI features) ────────
+
+    const ollamaTask = new ecs.FargateTaskDefinition(this, 'OllamaTask', {
+      memoryLimitMiB: 8192,
+      cpu: 4096,
+    });
+
+    ollamaTask.addContainer('ollama', {
+      image: ecs.ContainerImage.fromRegistry('ollama/ollama:latest'),
+      portMappings: [{ containerPort: 11434 }],
+      environment: {
+        OLLAMA_HOST: '0.0.0.0',
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'ollama', logGroup: pipelineLogGroup }),
+    });
+
+    const ollamaService = new ecs.FargateService(this, 'OllamaService', {
+      cluster,
+      taskDefinition: ollamaTask,
+      desiredCount: 1,
+      cloudMapOptions: { name: 'ollama' },
+    });
 
     // ── Frontend ─────────────────────────────────────────────────
 
@@ -171,12 +270,12 @@ export class EcsStack extends cdk.Stack {
 
     // ── ALB Target Groups ────────────────────────────────────────
 
-    const appTarget = listener.addTargets('AppTarget', {
+    listener.addTargets('AppTarget', {
       port: 8080,
       targets: [appService],
       healthCheck: { path: '/actuator/health', interval: cdk.Duration.seconds(30) },
       conditions: [
-        elbv2.ListenerCondition.pathPatterns(['/api/*', '/graphql', '/graphiql', '/uploads/*']),
+        elbv2.ListenerCondition.pathPatterns(['/api/*', '/graphql', '/graphiql', '/ws/*']),
       ],
       priority: 10,
     });
@@ -187,7 +286,7 @@ export class EcsStack extends cdk.Stack {
       healthCheck: { path: '/', interval: cdk.Duration.seconds(30) },
     });
 
-    // ── CloudFront for uploads CDN ───────────────────────────────
+    // ── CloudFront CDN ───────────────────────────────────────────
 
     const cdn = new cloudfront.Distribution(this, 'CDN', {
       defaultBehavior: {
@@ -198,7 +297,8 @@ export class EcsStack extends cdk.Stack {
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
       },
       additionalBehaviors: {
-        '/uploads/*': {
+        // Media served directly from S3 via CloudFront (bypass ALB)
+        '/api/media/*': {
           origin: new origins.S3Origin(props.uploadsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,

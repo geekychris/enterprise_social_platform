@@ -26,19 +26,22 @@ public class CommentService {
     private final AttachmentRepository attachmentRepository;
     private final AttachmentService attachmentService;
     private final JdbcTemplate jdbc;
+    private final EntityEventService entityEventService;
 
     public CommentService(CommentRepository commentRepository,
                           GlobalIdGenerator idGenerator,
                           UserService userService,
                           AttachmentRepository attachmentRepository,
                           AttachmentService attachmentService,
-                          JdbcTemplate jdbc) {
+                          JdbcTemplate jdbc,
+                          EntityEventService entityEventService) {
         this.commentRepository = commentRepository;
         this.idGenerator = idGenerator;
         this.userService = userService;
         this.attachmentRepository = attachmentRepository;
         this.attachmentService = attachmentService;
         this.jdbc = jdbc;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -68,6 +71,12 @@ public class CommentService {
                         saved.getId(), attId);
             }
         }
+
+        try {
+            entityEventService.publishCommentEvent("CREATE", saved.getId(), saved.getPostId(),
+                saved.getAuthorId(), saved.getContent(), saved.getParentCommentId(),
+                saved.getDepth(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
 
         return saved;
     }
@@ -124,11 +133,20 @@ public class CommentService {
     @Transactional
     public CommentEntity update(CommentEntity entity, String content) {
         entity.setContent(content);
-        return commentRepository.save(entity);
+        CommentEntity saved = commentRepository.save(entity);
+        try {
+            entityEventService.publishCommentEvent("UPDATE", saved.getId(), saved.getPostId(),
+                saved.getAuthorId(), saved.getContent(), saved.getParentCommentId(),
+                saved.getDepth(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     @Transactional
     public void delete(long commentId) {
         commentRepository.deleteById(commentId);
+        try {
+            entityEventService.publishCommentEvent("DELETE", commentId, 0, 0, null, null, 0, null);
+        } catch (Exception e) { /* don't affect main flow */ }
     }
 }

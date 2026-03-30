@@ -14,5 +14,6 @@ resources:
   - aoee.yaml
   - social-app.yaml
   - data-warehouse.yaml
+  - airflow.yaml
   - frontend.yaml
   - ingress.yaml

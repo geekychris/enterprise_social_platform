@@ -27,17 +27,20 @@ public class MutationController {
     private final ReactionService reactionService;
     private final FollowRepository followRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final EntityEventService entityEventService;
 
     public MutationController(PostService postService,
                               CommentService commentService,
                               ReactionService reactionService,
                               FollowRepository followRepository,
-                              ApplicationEventPublisher eventPublisher) {
+                              ApplicationEventPublisher eventPublisher,
+                              EntityEventService entityEventService) {
         this.postService = postService;
         this.commentService = commentService;
         this.reactionService = reactionService;
         this.followRepository = followRepository;
         this.eventPublisher = eventPublisher;
+        this.entityEventService = entityEventService;
     }
 
     @MutationMapping
@@ -94,8 +97,11 @@ public class MutationController {
             var entity = new FollowEntity();
             entity.setFollowerId(userId);
             entity.setFollowedId(targetId);
-            followRepository.save(entity);
+            FollowEntity saved = followRepository.save(entity);
             eventPublisher.publishEvent(new FollowEvent(userId, targetId, true));
+            try {
+                entityEventService.publishFollowEvent("CREATE", userId, targetId, saved.getCreatedAt());
+            } catch (Exception e) { /* don't affect main flow */ }
         }
         return true;
     }
@@ -109,6 +115,9 @@ public class MutationController {
         if (followRepository.existsById(id)) {
             followRepository.deleteById(id);
             eventPublisher.publishEvent(new FollowEvent(userId, targetId, false));
+            try {
+                entityEventService.publishFollowEvent("DELETE", userId, targetId, null);
+            } catch (Exception e) { /* don't affect main flow */ }
         }
         return true;
     }

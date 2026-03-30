@@ -1,0 +1,30 @@
+{
+  "name": "EntityGroup",
+  "log_type": "entity_group",
+  "version": "1.0.0",
+  "description": "CDC events for group entity changes",
+  "kafka": {
+    "topic": "worksphere-entity-groups",
+    "partitions": 4,
+    "replication_factor": 1,
+    "retention_ms": 2592000000
+  },
+  "warehouse": {
+    "table_name": "warehouse.groups_hourly",
+    "partition_by": ["event_hour"],
+    "sort_by": ["event_timestamp", "id"],
+    "retention_days": 90
+  },
+  "fields": [
+    {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+    {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+    {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+    {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+    {"name": "id", "type": "long", "required": true, "description": "Group ID"},
+    {"name": "name", "type": "string", "required": true, "description": "Group name"},
+    {"name": "description", "type": "string", "required": false, "description": "Group description"},
+    {"name": "visibility", "type": "string", "required": false, "description": "PUBLIC, PRIVATE, etc"},
+    {"name": "owner_id", "type": "long", "required": true, "description": "Owner user ID"},
+    {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+  ]
+}

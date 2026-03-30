@@ -24,13 +24,16 @@ public class UserService {
     private final FollowRepository followRepository;
     private final GlobalIdGenerator idGenerator;
     private final CacheService cacheService;
+    private final EntityEventService entityEventService;
 
     public UserService(UserRepository userRepository, FollowRepository followRepository,
-                       GlobalIdGenerator idGenerator, CacheService cacheService) {
+                       GlobalIdGenerator idGenerator, CacheService cacheService,
+                       EntityEventService entityEventService) {
         this.userRepository = userRepository;
         this.followRepository = followRepository;
         this.idGenerator = idGenerator;
         this.cacheService = cacheService;
+        this.entityEventService = entityEventService;
     }
 
     @Transactional
@@ -43,7 +46,14 @@ public class UserService {
         entity.setPasswordHash(passwordHash);
         entity.setBio(bio);
         entity.setVisibility(Visibility.PUBLIC.name());
-        return userRepository.save(entity);
+        UserEntity saved = userRepository.save(entity);
+        try {
+            entityEventService.publishUserEvent("CREATE", saved.getId(), saved.getUsername(),
+                saved.getDisplayName(), saved.getEmail(), saved.getAvatarUrl(), saved.getBio(),
+                saved.getVisibility(), saved.isAdmin(), saved.getJobTitle(), saved.getDepartment(),
+                saved.getManagerId(), saved.getLocation(), saved.isBot(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     @Transactional
@@ -59,7 +69,14 @@ public class UserService {
         entity.setJobTitle(jobTitle);
         entity.setAdmin(admin);
         entity.setVisibility(Visibility.PUBLIC.name());
-        return userRepository.save(entity);
+        UserEntity saved = userRepository.save(entity);
+        try {
+            entityEventService.publishUserEvent("CREATE", saved.getId(), saved.getUsername(),
+                saved.getDisplayName(), saved.getEmail(), saved.getAvatarUrl(), saved.getBio(),
+                saved.getVisibility(), saved.isAdmin(), saved.getJobTitle(), saved.getDepartment(),
+                saved.getManagerId(), saved.getLocation(), saved.isBot(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
+        return saved;
     }
 
     public Optional<UserEntity> getById(long id) {
@@ -117,6 +134,12 @@ public class UserService {
         UserEntity saved = userRepository.save(entity);
         cacheService.evict("user:summary:" + saved.getId());
         cacheService.evict("user:dto:" + saved.getId());
+        try {
+            entityEventService.publishUserEvent("UPDATE", saved.getId(), saved.getUsername(),
+                saved.getDisplayName(), saved.getEmail(), saved.getAvatarUrl(), saved.getBio(),
+                saved.getVisibility(), saved.isAdmin(), saved.getJobTitle(), saved.getDepartment(),
+                saved.getManagerId(), saved.getLocation(), saved.isBot(), saved.getCreatedAt());
+        } catch (Exception e) { /* don't affect main flow */ }
         return saved;
     }
 
