@@ -7,7 +7,7 @@ import api from '../api/client';
 import OrgAdminTab from '../components/admin/OrgAdminTab';
 import MLPlaygroundTab from '../components/admin/MLPlaygroundTab';
 
-type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org' | 'ml';
+type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org' | 'ml' | 'devops';
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -18,6 +18,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'org', label: 'Organization' },
   { key: 'ml', label: 'ML Playground' },
   { key: 'graph', label: 'Graph Explorer' },
+  { key: 'devops', label: 'DevOps' },
 ];
 
 export default function AdminPage() {
@@ -80,6 +81,7 @@ export default function AdminPage() {
       {activeTab === 'org' && <OrgAdminTab />}
       {activeTab === 'ml' && <MLPlaygroundTab />}
       {activeTab === 'graph' && <GraphExplorerTab />}
+      {activeTab === 'devops' && <DevOpsTab />}
     </div>
   );
 }
@@ -2514,6 +2516,398 @@ function ThemeSelector() {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────── DevOps Tab ────────────────────────── */
+
+const GITHUB_BASE = 'https://github.com/geekychris/enterprise_social_platform/blob/main';
+
+interface ServiceInfo {
+  name: string;
+  category: string;
+  url?: string;
+  port?: string;
+  credentials?: string;
+  connection?: string;
+  status?: 'healthy' | 'unhealthy' | 'unknown';
+  notes?: string;
+}
+
+function DevOpsTab() {
+  const [serviceHealth, setServiceHealth] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    const checks: { key: string; url: string }[] = [
+      { key: 'social-app', url: '/actuator/health' },
+      { key: 'redis', url: '/api/admin/analytics/topics' },
+      { key: 'opensearch', url: '/api/search?query=_health&type=ALL' },
+    ];
+    checks.forEach(({ key, url }) => {
+      api.get(url).then(() => setServiceHealth((p) => ({ ...p, [key]: 'up' })))
+        .catch(() => setServiceHealth((p) => ({ ...p, [key]: 'down' })));
+    });
+  }, []);
+
+  const services: ServiceInfo[] = [
+    {
+      name: 'Social App (Spring Boot)',
+      category: 'Application',
+      url: 'http://localhost:8080',
+      port: '8080',
+      credentials: 'JWT auth (debug: X-Debug-User-Id header)',
+      connection: 'http://localhost:8080/api/*',
+      notes: 'Main REST API + WebSocket (/ws)',
+    },
+    {
+      name: 'React Frontend',
+      category: 'Application',
+      url: 'http://localhost:3999',
+      port: '3999',
+      notes: 'Vite dev server, proxies /api to :8080',
+    },
+    {
+      name: 'PostgreSQL',
+      category: 'Database',
+      port: '5432',
+      credentials: 'social / social_dev_password',
+      connection: 'jdbc:postgresql://localhost:5432/social_enterprise',
+      notes: 'Primary database. 18 Flyway migrations.',
+    },
+    {
+      name: 'Redis',
+      category: 'Cache & Messaging',
+      port: '6379',
+      connection: 'redis://localhost:6379',
+      notes: 'L2 cache, pub/sub, feed sorted sets. No auth in dev.',
+    },
+    {
+      name: 'Apache Kafka',
+      category: 'Streaming',
+      port: '9092 (host) / 29092 (Docker)',
+      connection: 'bootstrap.servers=localhost:9092',
+      notes: '14 topics: 2 analytics, 9 entity CDC, 3 events.',
+    },
+    {
+      name: 'OpenSearch',
+      category: 'Search',
+      url: 'http://localhost:9200',
+      port: '9200',
+      connection: 'http://localhost:9200',
+      notes: 'Full-text search for users and pages.',
+    },
+    {
+      name: 'AOEE Graph Cache',
+      category: 'Graph',
+      url: 'http://localhost:8082',
+      port: '8082 (proxy) / 50051 (gRPC)',
+      connection: 'http://localhost:8082/api/*',
+      notes: 'Rust in-memory graph. Read-through + write-through to PostgreSQL.',
+    },
+    {
+      name: 'Ollama (LLM)',
+      category: 'AI',
+      url: 'http://localhost:11434',
+      port: '11434',
+      connection: 'http://localhost:11434/api/chat',
+      notes: 'Local LLM for bot (Roid), summarization, AI assistant.',
+    },
+    {
+      name: 'MinIO (S3)',
+      category: 'Storage',
+      url: 'http://localhost:9001',
+      port: '9000 (API) / 9001 (Console)',
+      credentials: 'admin / password123',
+      connection: 's3://localhost:9000 (path-style, region: us-east-1)',
+      notes: 'Buckets: media (uploads), warehouse (Iceberg data).',
+    },
+    {
+      name: 'Hive Metastore',
+      category: 'Data Warehouse',
+      port: '9083',
+      connection: 'thrift://localhost:9083',
+      notes: 'Iceberg table catalog. Backed by ws-hive-postgres on port 5433.',
+    },
+    {
+      name: 'Trino',
+      category: 'Data Warehouse',
+      url: 'http://localhost:8081',
+      port: '8081',
+      credentials: 'admin (no password)',
+      connection: 'jdbc:trino://localhost:8081/iceberg/worksphere',
+      notes: 'SQL engine over Iceberg tables. JDBC driver: io.trino.jdbc.TrinoDriver',
+    },
+    {
+      name: 'Spark Consumer',
+      category: 'Data Warehouse',
+      notes: '11 streaming jobs: Kafka to Iceberg (30s micro-batches). Auto-discovers log-configs/*.json.',
+    },
+    {
+      name: 'Apache Airflow',
+      category: 'Orchestration',
+      url: 'http://localhost:8083',
+      port: '8083',
+      credentials: 'admin / worksphere',
+      notes: '3 DAGs: signal table setup, daily entity rollup (02:00 UTC), daily metrics (04:00 UTC).',
+    },
+  ];
+
+  const categories = [...new Set(services.map((s) => s.category))];
+
+  const docs = [
+    { title: 'Architecture Guide', path: 'docs/ARCHITECTURE.md', desc: 'System design, backend layers, diagrams' },
+    { title: 'System Design', path: 'docs/SYSTEM_DESIGN.md', desc: 'Multi-client architecture, services, data flows' },
+    { title: 'Data Warehouse & ML', path: 'docs/DATA_WAREHOUSE.md', desc: 'Pipeline, Trino queries, ML training' },
+    { title: 'Warehouse Batch Processing', path: 'docs/WAREHOUSE_BATCH.md', desc: 'Airflow DAGs, signal tables, DAU/MAU' },
+    { title: 'Adding a Log Type', path: 'docs/ADDING_A_LOG_TYPE.md', desc: 'End-to-end guide for new analytics events' },
+    { title: 'Scalability Architecture', path: 'docs/SCALABILITY_ARCHITECTURE.md', desc: 'Redis, Kafka, WebSocket, feed fan-out' },
+    { title: 'IntelliJ Run Config', path: 'docs/INTELLIJ_RUN.md', desc: 'Running/debugging from IDE' },
+    { title: 'AWS Deployment', path: 'docs/AWS_DEPLOYMENT.md', desc: 'CDK stacks, managed services' },
+    { title: 'Roid Bot Guide', path: 'docs/ROID_BOT.md', desc: 'Bot commands, actions, memory' },
+    { title: 'Feature Suggestions', path: 'docs/SUGGESTIONS.md', desc: 'Future feature ideas' },
+  ];
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* ── Service Directory ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Service Directory</h2>
+        {categories.map((cat) => (
+          <div key={cat} className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{cat}</h3>
+            <div className="grid gap-3">
+              {services
+                .filter((s) => s.category === cat)
+                .map((svc) => (
+                  <div key={svc.name} className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-gray-900">{svc.name}</h4>
+                          {svc.port && (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                              :{svc.port}
+                            </span>
+                          )}
+                        </div>
+                        {svc.notes && <p className="text-sm text-gray-500 mt-1">{svc.notes}</p>}
+                      </div>
+                      {svc.url && (
+                        <a
+                          href={svc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs bg-primary-50 text-primary-600 px-3 py-1 rounded-full font-medium hover:bg-primary-100 transition-colors"
+                        >
+                          Open
+                        </a>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-1.5">
+                      {svc.credentials && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-20 shrink-0">Credentials</span>
+                          <code className="text-xs bg-gray-50 px-2 py-1 rounded text-gray-700 flex-1 font-mono">
+                            {svc.credentials}
+                          </code>
+                          <button
+                            onClick={() => copyToClipboard(svc.credentials!)}
+                            className="text-gray-400 hover:text-gray-600 text-xs"
+                            title="Copy"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )}
+                      {svc.connection && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-20 shrink-0">Connection</span>
+                          <code className="text-xs bg-gray-50 px-2 py-1 rounded text-gray-700 flex-1 font-mono truncate">
+                            {svc.connection}
+                          </code>
+                          <button
+                            onClick={() => copyToClipboard(svc.connection!)}
+                            className="text-gray-400 hover:text-gray-600 text-xs"
+                            title="Copy"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Quick Connection Strings ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Quick Connection Strings</h2>
+        <div className="bg-gray-900 rounded-lg p-5 font-mono text-sm text-gray-300 space-y-2 overflow-x-auto">
+          {[
+            { label: 'PostgreSQL JDBC', cmd: 'jdbc:postgresql://localhost:5432/social_enterprise  (social / social_dev_password)' },
+            { label: 'Trino JDBC', cmd: 'jdbc:trino://localhost:8081/iceberg/worksphere  (admin, no password)' },
+            { label: 'Trino CLI', cmd: 'trino --server localhost:8081 --catalog iceberg --schema worksphere' },
+            { label: 'Redis CLI', cmd: 'redis-cli -h localhost -p 6379' },
+            { label: 'Kafka Topics', cmd: 'kafka-topics --list --bootstrap-server localhost:9092' },
+            { label: 'MinIO mc', cmd: 'mc alias set ws http://localhost:9000 admin password123' },
+            { label: 'S3 (MinIO)', cmd: 'endpoint=http://localhost:9000  access_key=admin  secret_key=password123  region=us-east-1  path_style=true' },
+            { label: 'Airflow API', cmd: 'curl -u admin:worksphere http://localhost:8083/api/v1/dags' },
+          ].map(({ label, cmd }) => (
+            <div key={label} className="flex items-start gap-3 group">
+              <span className="text-green-400 w-36 shrink-0 text-right">{'# ' + label}</span>
+              <span className="flex-1 text-gray-100 select-all">{cmd}</span>
+              <button
+                onClick={() => copyToClipboard(cmd)}
+                className="text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+              >
+                Copy
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Startup Commands ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Startup</h2>
+        <div className="bg-gray-900 rounded-lg p-5 font-mono text-sm text-gray-300 space-y-1">
+          <div><span className="text-green-400"># Start everything</span></div>
+          <div className="text-gray-100">./scripts/start-all.sh</div>
+          <div className="mt-3"><span className="text-green-400"># Start infra only (run app from IntelliJ)</span></div>
+          <div className="text-gray-100">./scripts/start-all.sh --no-app</div>
+          <div className="mt-3"><span className="text-green-400"># Data warehouse only</span></div>
+          <div className="text-gray-100">docker compose -f docker-compose.data-warehouse.yml up -d</div>
+          <div className="mt-3"><span className="text-green-400"># Core services only</span></div>
+          <div className="text-gray-100">docker compose up -d</div>
+        </div>
+      </div>
+
+      {/* ── Kafka Topics ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Kafka Topics</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { group: 'Analytics', topics: ['worksphere-feed-impressions', 'worksphere-user-interactions'] },
+            { group: 'Events', topics: ['posts.created', 'messages.sent', 'reactions.added'] },
+            { group: 'Entity CDC', topics: [
+              'worksphere-entity-users', 'worksphere-entity-posts', 'worksphere-entity-comments',
+              'worksphere-entity-reactions', 'worksphere-entity-messages', 'worksphere-entity-groups',
+              'worksphere-entity-pages', 'worksphere-entity-follows', 'worksphere-entity-memberships',
+            ]},
+          ].map(({ group, topics }) => (
+            <div key={group} className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="font-semibold text-gray-700 text-sm mb-2">{group}</h4>
+              <div className="space-y-1">
+                {topics.map((t) => (
+                  <div key={t} className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded">{t}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Iceberg Tables ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Iceberg Tables (iceberg.worksphere.*)</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { group: 'Analytics', tables: ['feedimpression', 'userinteraction'] },
+            { group: 'Entity Hourly', tables: [
+              'entityuser', 'entitypost', 'entitycomment', 'entityreaction',
+              'entitymessage', 'entitygroup', 'entitypage', 'entityfollow', 'entitymembership',
+            ]},
+            { group: 'Daily ALL', tables: [
+              'user_daily', 'post_daily', 'comment_daily', 'reaction_daily',
+              'message_daily', 'group_daily', 'page_daily', 'follow_daily', 'membership_daily',
+            ]},
+            { group: 'Pipeline', tables: ['signals', 'daily_metrics'] },
+          ].map(({ group, tables }) => (
+            <div key={group} className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="font-semibold text-gray-700 text-sm mb-2">{group}</h4>
+              <div className="space-y-1">
+                {tables.map((t) => (
+                  <div key={t} className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded">{t}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Documentation ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Documentation</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {docs.map((doc) => (
+            <a
+              key={doc.path}
+              href={`${GITHUB_BASE}/${doc.path}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-sm transition-all group"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                    {doc.title}
+                  </h4>
+                  <p className="text-sm text-gray-500 mt-0.5">{doc.desc}</p>
+                </div>
+                <span className="text-gray-400 group-hover:text-primary-500 text-xs mt-1">
+                  {doc.path.split('/').pop()}
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Docker Containers ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Docker Containers</h2>
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left">
+              <tr>
+                <th className="px-4 py-2 font-medium text-gray-600">Container</th>
+                <th className="px-4 py-2 font-medium text-gray-600">Compose File</th>
+                <th className="px-4 py-2 font-medium text-gray-600">Purpose</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {[
+                ['social-postgres', 'docker-compose.yml', 'Primary database'],
+                ['social-opensearch', 'docker-compose.yml', 'Full-text search'],
+                ['social-aoee', 'docker-compose.yml', 'Graph cache (Rust gRPC)'],
+                ['social-aoee-proxy', 'docker-compose.yml', 'Graph cache REST proxy'],
+                ['ws-minio', 'docker-compose.data-warehouse.yml', 'S3 storage (media + warehouse)'],
+                ['ws-hive-postgres', 'docker-compose.data-warehouse.yml', 'Hive Metastore metadata'],
+                ['ws-hive-metastore', 'docker-compose.data-warehouse.yml', 'Iceberg catalog'],
+                ['ws-trino', 'docker-compose.data-warehouse.yml', 'SQL query engine'],
+                ['ws-spark-consumer', 'docker-compose.data-warehouse.yml', 'Kafka to Iceberg streaming'],
+                ['ws-airflow-postgres', 'docker-compose.data-warehouse.yml', 'Airflow metadata'],
+                ['ws-airflow-webserver', 'docker-compose.data-warehouse.yml', 'Airflow UI'],
+                ['ws-airflow-scheduler', 'docker-compose.data-warehouse.yml', 'Airflow task executor'],
+              ].map(([name, file, purpose]) => (
+                <tr key={name} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 font-mono text-xs text-gray-800">{name}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{file}</td>
+                  <td className="px-4 py-2 text-xs text-gray-600">{purpose}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
