@@ -268,14 +268,67 @@ export class EcsStack extends cdk.Stack {
       desiredCount: frontendDesiredCount,
     });
 
+    // ── WebSocket Gateway (Netty, non-blocking) ──────────────────
+
+    const gwTask = new ecs.FargateTaskDefinition(this, 'WsGatewayTask', {
+      memoryLimitMiB: 1024,
+      cpu: 512,
+    });
+
+    gwTask.addContainer('ws-gateway', {
+      image: ecs.ContainerImage.fromEcrRepository(props.ecrRepos.socialApp, 'ws-gateway'),
+      portMappings: [{ containerPort: 8090 }],
+      environment: {
+        WS_GATEWAY_PORT: '8090',
+        REDIS_HOST: props.redisEndpoint,
+        REDIS_PORT: props.redisPort,
+        SOCIAL_APP_URL: 'http://social-app.worksphere.local:8080',
+      },
+      secrets: {
+        SOCIAL_JWT_SECRET: ecs.Secret.fromSecretsManager(props.jwtSecret),
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'ws-gateway', logGroup: appLogGroup }),
+      healthCheck: {
+        command: ['CMD-SHELL', 'curl -f http://localhost:8090/health || exit 1'],
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        retries: 3,
+        startPeriod: cdk.Duration.seconds(30),
+      },
+    });
+
+    const gwService = new ecs.FargateService(this, 'WsGatewayService', {
+      cluster,
+      taskDefinition: gwTask,
+      desiredCount: 2,
+      cloudMapOptions: { name: 'ws-gateway' },
+    });
+
+    props.redisSecurityGroup.addIngressRule(gwService.connections.securityGroups[0], ec2.Port.tcp(6379));
+
     // ── ALB Target Groups ────────────────────────────────────────
 
+    // WebSocket gateway — sticky sessions, long idle timeout
+    const gwTarget = listener.addTargets('WsGatewayTarget', {
+      port: 8090,
+      targets: [gwService],
+      healthCheck: { path: '/health', interval: cdk.Duration.seconds(30) },
+      conditions: [
+        elbv2.ListenerCondition.pathPatterns(['/ws']),
+      ],
+      priority: 5,
+      stickinessCookieDuration: cdk.Duration.days(1),
+    });
+    // Set idle timeout for WebSocket connections (ALB attribute)
+    gwTarget.setAttribute('idle_timeout.timeout_seconds', '3600');
+
+    // Social app — REST API
     listener.addTargets('AppTarget', {
       port: 8080,
       targets: [appService],
       healthCheck: { path: '/actuator/health', interval: cdk.Duration.seconds(30) },
       conditions: [
-        elbv2.ListenerCondition.pathPatterns(['/api/*', '/graphql', '/graphiql', '/ws/*']),
+        elbv2.ListenerCondition.pathPatterns(['/api/*', '/graphql', '/graphiql']),
       ],
       priority: 10,
     });
@@ -308,7 +361,10 @@ export class EcsStack extends cdk.Stack {
 
     // ── Outputs ──────────────────────────────────────────────────
 
-    new cdk.CfnOutput(this, 'AlbDnsName', { value: alb.loadBalancerDnsName });
+    new cdk.CfnOutput(this, 'AlbDnsName', {
+      value: alb.loadBalancerDnsName,
+      description: 'WebSocket: ws://{ALB}/ws — CloudFront does NOT support WebSocket',
+    });
     new cdk.CfnOutput(this, 'CloudFrontUrl', { value: `https://${cdn.distributionDomainName}` });
     new cdk.CfnOutput(this, 'ClusterName', { value: cluster.clusterName });
   }

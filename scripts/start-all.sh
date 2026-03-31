@@ -118,6 +118,29 @@ else
   echo ""
 fi
 
+# ── 8. WebSocket Gateway ──
+echo ""
+echo "── Step 8: WebSocket Gateway (Netty) ──"
+if $SKIP_APP; then
+  echo "  ⏭ Skipped (--no-app)"
+elif pgrep -f 'ws-gateway-1.0.0' > /dev/null; then
+  echo "  ✓ WS Gateway already running"
+else
+  if [ -f "$PROJECT_DIR/social-platform/ws-gateway/target/ws-gateway-1.0.0-SNAPSHOT.jar" ]; then
+    echo "  Starting WS Gateway..."
+    java -jar "$PROJECT_DIR/social-platform/ws-gateway/target/ws-gateway-1.0.0-SNAPSHOT.jar" \
+      > /tmp/ws-gateway.log 2>&1 &
+    echo "  Started (PID: $!). Log: /tmp/ws-gateway.log"
+    for i in $(seq 1 15); do
+      curl -s http://localhost:8090/health 2>/dev/null | grep -q UP && echo "  ✓ WS Gateway ready on :8090" && break
+      sleep 2; printf "."
+    done
+    echo ""
+  else
+    echo "  ✗ ws-gateway jar not found. Build with: cd social-platform/ws-gateway && mvn package -DskipTests"
+  fi
+fi
+
 # ── Status ──
 echo ""
 echo "═══════════════════════════════════════════════════"
@@ -126,6 +149,7 @@ echo "════════════════════════�
 echo ""
 echo "Services:"
 pgrep -f 'social-app-1.0.0' > /dev/null && echo "  ✓ Social App         http://localhost:8080" || echo "  · Social App         (not running — start from IDE or remove --no-app)"
+pgrep -f 'ws-gateway-1.0.0' > /dev/null && echo "  ✓ WS Gateway         ws://localhost:8090/ws (Netty)" || echo "  · WS Gateway         (not running)"
 redis-cli ping 2>/dev/null | grep -q PONG && echo "  ✓ Redis              localhost:6379" || echo "  ✗ Redis"
 lsof -i :9092 2>/dev/null | grep -q LISTEN && echo "  ✓ Kafka              localhost:9092" || echo "  ✗ Kafka"
 curl -s http://localhost:11434/api/tags > /dev/null 2>&1 && echo "  ✓ Ollama             http://localhost:11434" || echo "  ✗ Ollama"
@@ -145,5 +169,6 @@ echo "  Admin:            http://localhost:8080/admin"
 echo "  MinIO Console:    http://localhost:9001 (admin/password123)"
 echo "  Trino:            trino --server localhost:8081 --catalog iceberg"
 echo "  Airflow:            http://localhost:8083 (admin/worksphere)"
+echo "  WS Gateway:       ws://localhost:8090/ws?userId=ID"
 echo "  Kafka Topics:     kafka-topics --list --bootstrap-server localhost:9092"
 echo ""

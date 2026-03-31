@@ -2,34 +2,23 @@
 
 ## Architecture
 
-```
-App (Social Platform)
-    │
-    ├─→ FeedImpressionLogger ──→ Kafka: worksphere-feed-impressions
-    │                                      │
-    ├─→ UserInteractionLogger ─→ Kafka: worksphere-user-interactions
-    │                                      │
-    └─→ EventPublisher ────────→ Kafka: posts.created, messages.sent, reactions.added
-                                           │
-                                    ┌──────┴──────┐
-                                    │ Spark        │
-                                    │ Consumer     │
-                                    │ (30s batch)  │
-                                    └──────┬──────┘
-                                           │
-                                    ┌──────┴──────┐
-                                    │ Apache       │
-                                    │ Iceberg      │
-                                    │ (MinIO/S3)   │
-                                    └──────┬──────┘
-                                           │
-                              ┌────────────┼────────────┐
-                              │            │            │
-                              ▼            ▼            ▼
-                         ┌────────┐  ┌─────────┐  ┌─────────┐
-                         │ Trino  │  │ ML      │  │ Admin   │
-                         │ (SQL)  │  │ Training│  │ UI      │
-                         └────────┘  └─────────┘  └─────────┘
+```mermaid
+graph TB
+    App["App (Social Platform)"]
+
+    App -->|FeedImpressionLogger| K1["Kafka: worksphere-feed-impressions"]
+    App -->|UserInteractionLogger| K2["Kafka: worksphere-user-interactions"]
+    App -->|EventPublisher| K3["Kafka: posts.created, messages.sent, reactions.added"]
+
+    K1 --> Spark["Spark Consumer<br/>(30s batch)"]
+    K2 --> Spark
+    K3 --> Spark
+
+    Spark --> Iceberg["Apache Iceberg<br/>(MinIO/S3)"]
+
+    Iceberg --> Trino["Trino (SQL)"]
+    Iceberg --> ML["ML Training"]
+    Iceberg --> Admin["Admin UI"]
 ```
 
 ## Prerequisites

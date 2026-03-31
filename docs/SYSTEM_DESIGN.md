@@ -6,42 +6,24 @@ WorkSphere is an enterprise social platform comprising a Spring Boot backend, Re
 
 ## Architecture Diagram
 
-```
-                              ┌──────────────────────────────┐
-                              │       Load Balancer /         │
-                              │       Ingress Controller      │
-                              └──────────┬───────────────────┘
-                                         │
-              ┌──────────────────────────┼──────────────────────────┐
-              │                          │                          │
-     ┌────────┴────────┐     ┌──────────┴──────────┐    ┌─────────┴─────────┐
-     │   React SPA     │     │   Social App API     │    │   WebSocket       │
-     │   (Nginx)       │     │   (Spring Boot)      │    │   Gateway         │
-     │   Port 80       │     │   Port 8080           │    │   /ws (STOMP)    │
-     └─────────────────┘     │                       │    │   (same process) │
-                              │   REST API            │    └───────────────────┘
-     ┌─────────────────┐     │   GraphQL              │
-     │   iOS App        │────│   AI SSE streaming     │
-     │   (SwiftUI)      │    │   Rate limiting        │
-     └─────────────────┘     │                       │
-                              └──────────┬───────────┘
-     ┌─────────────────┐                │
-     │   Android App    │               │
-     │   (Compose)      │    ┌──────────┼──────────────────────────────┐
-     └─────────────────┘     │          │          │         │         │
-                         ┌───┴───┐  ┌───┴───┐  ┌──┴──┐  ┌──┴──┐  ┌──┴──────┐
-                         │Postgre│  │ Redis │  │Kafka│  │Ollama│  │OpenSearch│
-                         │  SQL  │  │       │  │     │  │ LLM  │  │         │
-                         │Primary│  │Cache +│  │Event│  │      │  │Full-text│
-                         │+ Read │  │Pub/Sub│  │Bus  │  │      │  │ Search  │
-                         │Replica│  │+Feeds │  │     │  │      │  │         │
-                         └───────┘  └───────┘  └─────┘  └──────┘  └─────────┘
-                              │
-                         ┌────┴────┐
-                         │  AOEE   │
-                         │  Graph  │
-                         │  Engine │
-                         └─────────┘
+```mermaid
+graph TB
+    LB["Load Balancer /<br/>Ingress Controller"]
+
+    LB --> React["React SPA<br/>(Nginx)<br/>Port 80"]
+    LB --> API["Social App API<br/>(Spring Boot)<br/>Port 8080<br/>REST API, GraphQL<br/>AI SSE streaming<br/>Rate limiting"]
+    LB --> WS["WebSocket Gateway<br/>/ws (STOMP)<br/>(same process)"]
+
+    iOS["iOS App<br/>(SwiftUI)"] --> API
+    Android["Android App<br/>(Compose)"] --> API
+
+    API --> PG["PostgreSQL<br/>Primary + Read Replica"]
+    API --> Redis["Redis<br/>Cache + Pub/Sub + Feeds"]
+    API --> Kafka["Kafka<br/>Event Bus"]
+    API --> Ollama["Ollama<br/>LLM"]
+    API --> OS["OpenSearch<br/>Full-text Search"]
+
+    PG --> AOEE["AOEE<br/>Graph Engine"]
 ```
 
 ## Client Applications
@@ -99,16 +81,16 @@ The monolithic backend handles all API requests, WebSocket connections, event pu
 
 #### Request Flow
 
-```
-HTTP Request
-    → RateLimitFilter (Caffeine-based, per-user/IP, 60-300 req/min)
-    → DebugAuthFilter (X-Debug-User-Id bypass)
-    → JwtAuthFilter (Bearer token validation)
-    → Spring Security (endpoint authorization)
-    → Controller (REST/GraphQL/WebSocket)
-    → Service Layer (business logic)
-    → Repository Layer (JPA/JDBC)
-    → PostgreSQL
+```mermaid
+graph TB
+    A["HTTP Request"] --> B["RateLimitFilter<br/>(Caffeine-based, per-user/IP, 60-300 req/min)"]
+    B --> C["DebugAuthFilter<br/>(X-Debug-User-Id bypass)"]
+    C --> D["JwtAuthFilter<br/>(Bearer token validation)"]
+    D --> E["Spring Security<br/>(endpoint authorization)"]
+    E --> F["Controller<br/>(REST/GraphQL/WebSocket)"]
+    F --> G["Service Layer<br/>(business logic)"]
+    G --> H["Repository Layer<br/>(JPA/JDBC)"]
+    H --> I["PostgreSQL"]
 ```
 
 #### Service Layer
@@ -152,62 +134,78 @@ Redis Roles:
 
 #### Kafka (Event Streaming)
 
-```
-Topics:
-  messages.sent    (4 partitions) → Consumed by: notification service (future)
-  posts.created    (4 partitions) → Consumed by: FeedFanoutConsumer (fan-out to followers)
-  reactions.added  (4 partitions) → Consumed by: analytics (future)
+```mermaid
+graph LR
+    subgraph Publishers
+        MS["MessageService.send()"]
+        PC["PostController.createPost()"]
+        RC["ReactionController.addReaction()"]
+    end
 
-Published by EventPublisher after:
-  - MessageService.send()
-  - PostController.createPost()
-  - ReactionController.addReaction()
+    EP["EventPublisher"]
+
+    MS --> EP
+    PC --> EP
+    RC --> EP
+
+    EP --> T1["messages.sent<br/>(4 partitions)"]
+    EP --> T2["posts.created<br/>(4 partitions)"]
+    EP --> T3["reactions.added<br/>(4 partitions)"]
+
+    T1 --> C1["notification service (future)"]
+    T2 --> C2["FeedFanoutConsumer<br/>(fan-out to followers)"]
+    T3 --> C3["analytics (future)"]
 ```
 
 #### WebSocket (Real-Time Messaging)
 
-```
-STOMP over SockJS at /ws
+```mermaid
+graph TB
+    subgraph Destinations["STOMP over SockJS at /ws"]
+        D1["/user/{userId}/queue/messages<br/>New message delivery"]
+        D2["/topic/conversation.{id}.typing<br/>Typing indicators"]
+    end
 
-Destinations:
-  /user/{userId}/queue/messages     → New message delivery
-  /topic/conversation.{id}.typing   → Typing indicators
-
-Message Flow:
-  1. Client connects to /ws with JWT token
-  2. WebSocketAuthInterceptor validates token, sets userId in session
-  3. Client subscribes to /user/{self}/queue/messages
-  4. On message send: MessageBroadcastService pushes to all participants
-  5. Redis Pub/Sub ensures delivery across multiple app instances
+    C["Client"] -->|"1. Connect /ws with JWT"| WSA["WebSocketAuthInterceptor<br/>2. Validate token, set userId"]
+    WSA -->|"3. Subscribe"| D1
+    Send["On message send"] --> MBS["MessageBroadcastService<br/>4. Push to all participants"]
+    MBS --> Redis["Redis Pub/Sub<br/>5. Delivery across instances"]
+    Redis --> D1
 ```
 
 #### Rate Limiting
 
-```
-RateLimitFilter (Caffeine-backed, per-minute windows):
-  /api/conversations, /api/messages  → 300 req/min
-  /api/feed                          → 120 req/min
-  /api/search                        → 60 req/min
-  /api/ai/*                          → 60 req/min
-  Default                            → 200 req/min
+```mermaid
+graph LR
+    RL["RateLimitFilter<br/>(Caffeine-backed, per-minute windows)"]
 
-Response headers:
-  X-RateLimit-Limit: 200
-  X-RateLimit-Remaining: 198
+    RL --> A["/api/conversations, /api/messages<br/>300 req/min"]
+    RL --> B["/api/feed<br/>120 req/min"]
+    RL --> C["/api/search<br/>60 req/min"]
+    RL --> D["/api/ai/*<br/>60 req/min"]
+    RL --> E["Default<br/>200 req/min"]
 
-  HTTP 429 when exceeded with retryAfterSeconds
+    RL -.->|"Response headers"| H["X-RateLimit-Limit: 200<br/>X-RateLimit-Remaining: 198<br/>HTTP 429 when exceeded"]
 ```
 
 #### Caching (Two-Layer)
 
-```
-CacheService:
-  L1: Caffeine (in-process, 10K entries, 5min TTL)
-  L2: Redis (shared, configurable TTL)
+```mermaid
+graph LR
+    subgraph CacheService
+        L1["L1: Caffeine<br/>(in-process, 10K entries, 5min TTL)"]
+        L2["L2: Redis<br/>(shared, configurable TTL)"]
+    end
 
-  Read: L1 → L2 → Database → Write back to L1+L2
-  Write: Update L1 + L2
-  Evict: Invalidate L1 + L2
+    Read["Read"] --> L1 -->|miss| L2 -->|miss| DB["Database"]
+    DB -->|write back| L1
+    DB -->|write back| L2
+
+    Write["Write"] --> L1
+    Write --> L2
+
+    Evict["Evict"] -.->|invalidate| L1
+    Evict -.->|invalidate| L2
 ```
 
 #### Materialized Views
@@ -228,132 +226,145 @@ unread_counts:
 
 ### AI Integration (Roid Bot)
 
-```
-User Message → BotService.handleMessage()
-                    │
-    Trigger Detection:
-    ├── DM with bot user → always respond
-    └── @roid mention in any conversation → join + respond
-                    │
-    Context Gathering (BotToolService):
-    ├── User's group memberships
-    ├── User's pages
-    ├── Recent conversation history (6 messages)
-    ├── User's saved memories
-    ├── [keyword: group/team] → group posts
-    ├── [keyword: page] → page posts
-    ├── [keyword: feed/new] → user's feed
-    ├── [keyword: search/find] → search results
-    ├── [keyword: org/report/manage] → org data
-    ├── [keyword: who/which/where] → broad search + user search
-    └── [keyword: profile/summarize] → user profile
-                    │
-    LLM Call (OllamaService):
-    ├── System prompt with action tag format + examples
-    ├── Context + user message
-    └── Response with potential [ACTION:...] tags
-                    │
-    Action Parsing:
-    ├── [ACTION:CREATE_POST|...] → BotActionService.createPost()
-    ├── [ACTION:CREATE_POLL|...] → BotActionService.createPollPost()
-    ├── [ACTION:SEND_MESSAGE|...] → BotActionService.sendMessage()
-    ├── [ACTION:JOIN_GROUP|...] → BotActionService.joinGroup()
-    └── [REMEMBER|key=...|value=...] → BotMemoryService.remember()
-                    │
-    Target Resolution:
-    ├── resolveTargetWithType() → tries group name, then page name
-    ├── resolveUserId() → tries numeric, username, display name
-    └── Membership verification before posting to groups
-                    │
-    Response saved as message from bot user
+```mermaid
+graph TB
+    UM["User Message"] --> BH["BotService.handleMessage()"]
+
+    BH --> TD["Trigger Detection"]
+    TD --> TD1["DM with bot user: always respond"]
+    TD --> TD2["@roid mention: join + respond"]
+
+    TD --> CG["Context Gathering (BotToolService)"]
+    CG --> CG1["User's group memberships"]
+    CG --> CG2["User's pages"]
+    CG --> CG3["Recent conversation history (6 messages)"]
+    CG --> CG4["User's saved memories"]
+    CG --> CG5["keyword: group/team -> group posts"]
+    CG --> CG6["keyword: page -> page posts"]
+    CG --> CG7["keyword: feed/new -> user's feed"]
+    CG --> CG8["keyword: search/find -> search results"]
+    CG --> CG9["keyword: org/report/manage -> org data"]
+    CG --> CG10["keyword: who/which/where -> broad + user search"]
+    CG --> CG11["keyword: profile/summarize -> user profile"]
+
+    CG --> LLM["LLM Call (OllamaService)"]
+    LLM --> L1["System prompt with action tag format + examples"]
+    LLM --> L2["Context + user message"]
+    LLM --> L3["Response with potential ACTION tags"]
+
+    LLM --> AP["Action Parsing"]
+    AP --> A1["ACTION:CREATE_POST -> BotActionService.createPost()"]
+    AP --> A2["ACTION:CREATE_POLL -> BotActionService.createPollPost()"]
+    AP --> A3["ACTION:SEND_MESSAGE -> BotActionService.sendMessage()"]
+    AP --> A4["ACTION:JOIN_GROUP -> BotActionService.joinGroup()"]
+    AP --> A5["REMEMBER -> BotMemoryService.remember()"]
+
+    AP --> TR["Target Resolution"]
+    TR --> TR1["resolveTargetWithType(): group name, then page name"]
+    TR --> TR2["resolveUserId(): numeric, username, display name"]
+    TR --> TR3["Membership verification before posting"]
+
+    TR --> Resp["Response saved as message from bot user"]
 ```
 
 ### Database Schema
 
-```
-Core:
-  users                  → profiles, auth, org
-  posts (partitioned)    → content, quarterly partitions
-  comments (partitioned) → threaded, max depth 1
-  reactions              → 6 types, unique per user per target
-  attachments            → files, images
+```mermaid
+graph LR
+    subgraph Core
+        users["users: profiles, auth, org"]
+        posts["posts (partitioned): content, quarterly partitions"]
+        comments["comments (partitioned): threaded, max depth 1"]
+        reactions["reactions: 6 types, unique per user per target"]
+        attachments["attachments: files, images"]
+    end
 
-Messaging:
-  conversations                → DIRECT or GROUP
-  conversation_participants    → membership, last_read_at, visible_from
-  messages                     → content, conversation_id, sender_id
-  conversation_summaries       → denormalized last message (materialized)
-  unread_counts                → per-user per-conversation count (materialized)
+    subgraph Messaging
+        conversations["conversations: DIRECT or GROUP"]
+        conversation_participants["conversation_participants: membership, last_read_at, visible_from"]
+        messages["messages: content, conversation_id, sender_id"]
+        conversation_summaries["conversation_summaries: denormalized last message (materialized)"]
+        unread_counts["unread_counts: per-user per-conversation count (materialized)"]
+    end
 
-Social:
-  follows                → user-to-user
-  friend_requests        → send/accept/reject
-  memberships            → group membership with roles (OWNER/ADMIN/MEMBER)
-  page_memberships       → page follows
+    subgraph Social
+        follows["follows: user-to-user"]
+        friend_requests["friend_requests: send/accept/reject"]
+        memberships["memberships: group roles (OWNER/ADMIN/MEMBER)"]
+        page_memberships["page_memberships: page follows"]
+    end
 
-Organization:
-  org_units              → hierarchical: COMPANY → DIVISION → DEPARTMENT → TEAM
-  org_assignments        → user ↔ org unit with SOLID/DOTTED relationship
+    subgraph Organization
+        org_units["org_units: COMPANY > DIVISION > DEPARTMENT > TEAM"]
+        org_assignments["org_assignments: user-org unit, SOLID/DOTTED"]
+    end
 
-Features:
-  polls / poll_options / poll_votes → embedded in posts
-  bot_memory             → per-user key-value for AI memory
-  bot_triggers           → workflow automation rules
-  notifications          → in-app notifications
-  feed_entries           → pre-computed feed cache
+    subgraph Features
+        polls["polls / poll_options / poll_votes: embedded in posts"]
+        bot_memory["bot_memory: per-user key-value for AI memory"]
+        bot_triggers["bot_triggers: workflow automation rules"]
+        notifications["notifications: in-app notifications"]
+        feed_entries["feed_entries: pre-computed feed cache"]
+    end
 
-ID Generation:
-  GlobalIdGenerator      → (ObjectType << 56) | sequence
-  SnowflakeIdGenerator   → (timestamp << 22) | (nodeId << 12) | sequence
-  16 object types: USER, POST, COMMENT, TEAM, GROUP, PAGE, PROJECT,
-                   ATTACHMENT, REACTION, MESSAGE, INVITE_TOKEN, CONVERSATION,
-                   POLL, POLL_OPTION, BOT_MEMORY, ORG_UNIT, ORG_ASSIGNMENT
+    subgraph IDGeneration["ID Generation"]
+        GIG["GlobalIdGenerator: (ObjectType &lt;&lt; 56) | sequence"]
+        SIG["SnowflakeIdGenerator: (timestamp &lt;&lt; 22) | (nodeId &lt;&lt; 12) | sequence"]
+        OT["16 object types: USER, POST, COMMENT, TEAM,<br/>GROUP, PAGE, PROJECT, ATTACHMENT, REACTION,<br/>MESSAGE, INVITE_TOKEN, CONVERSATION, POLL,<br/>POLL_OPTION, BOT_MEMORY, ORG_UNIT, ORG_ASSIGNMENT"]
+    end
 ```
 
 ### Kubernetes Deployment
 
-```
-Namespace: worksphere
+```mermaid
+graph TB
+    subgraph worksphere["Namespace: worksphere"]
+        subgraph Stateful
+            postgres["postgres (1 replica, PV)<br/>Primary database"]
+            redis["redis (1 replica)<br/>Cache + Pub/Sub"]
+            kafka["kafka (1 replica, KRaft)<br/>Event streaming"]
+            opensearch["opensearch (1 replica)<br/>Full-text search"]
+            ollama["ollama (1 replica)<br/>AI/LLM"]
+        end
 
-Stateful:
-  postgres (1 replica, PV)     → Primary database
-  redis (1 replica)            → Cache + Pub/Sub
-  kafka (1 replica, KRaft)     → Event streaming
-  opensearch (1 replica)       → Full-text search
-  ollama (1 replica)           → AI/LLM
+        subgraph Stateless
+            socialapp["social-app (2 replicas)<br/>API + WebSocket"]
+            frontend["frontend (2 replicas)<br/>Nginx serving React SPA"]
+            aoeeserver["aoee-server (1 replica)<br/>Graph engine"]
+            aoeeproxy["aoee-proxy (1 replica)<br/>gRPC-to-HTTP proxy"]
+        end
 
-Stateless:
-  social-app (2 replicas)      → API + WebSocket
-  frontend (2 replicas)        → Nginx serving React SPA
-  aoee-server (1 replica)      → Graph engine
-  aoee-proxy (1 replica)       → gRPC-to-HTTP proxy
-
-Ingress:
-  /api, /ws, /actuator, /graphql, /uploads → social-app:8080
-  /                                         → frontend:80
-  WebSocket: enabled with long timeouts
+        subgraph Ingress
+            R1["/api, /ws, /actuator,<br/>/graphql, /uploads"] --> socialapp
+            R2["/"] --> frontend
+            WS["WebSocket: enabled<br/>with long timeouts"]
+        end
+    end
 ```
 
 ### Data Flow Examples
 
 #### Sending a Message
 
-```
-1. Client POST /api/conversations/{id}/messages {content}
-2. RateLimitFilter checks rate (300/min for messaging)
-3. ConversationController.sendMessage() validates participant
-4. MessageService.send():
-   a. Generate ID (GlobalIdGenerator)
-   b. Save to PostgreSQL (messages table)
-   c. Link attachments (if any)
-   d. ConversationSummaryService.updateSummary() → upsert conversation_summaries
-   e. UnreadCountService.incrementUnread() → UPDATE unread_counts +1 for all participants
-   f. MessageBroadcastService.broadcastMessage():
-      - SimpMessagingTemplate → push to WebSocket subscribers
-      - Redis PUBLISH conversation:{id} → other server instances
-   g. EventPublisher.publishMessageSent() → Kafka topic messages.sent
-5. BotService.handleMessage() → checks if bot should respond (async, virtual thread)
-6. Response: MessageDto JSON
+```mermaid
+graph TB
+    S1["1. Client POST /api/conversations/{id}/messages"]
+    S1 --> S2["2. RateLimitFilter checks rate (300/min)"]
+    S2 --> S3["3. ConversationController.sendMessage()<br/>validates participant"]
+    S3 --> S4["4. MessageService.send()"]
+
+    S4 --> S4a["a. Generate ID (GlobalIdGenerator)"]
+    S4a --> S4b["b. Save to PostgreSQL (messages table)"]
+    S4b --> S4c["c. Link attachments (if any)"]
+    S4c --> S4d["d. ConversationSummaryService.updateSummary()<br/>upsert conversation_summaries"]
+    S4d --> S4e["e. UnreadCountService.incrementUnread()<br/>UPDATE unread_counts +1 for all participants"]
+    S4e --> S4f["f. MessageBroadcastService.broadcastMessage()"]
+    S4f --> WS["SimpMessagingTemplate: push to WebSocket"]
+    S4f --> RP["Redis PUBLISH conversation:{id}: other instances"]
+    S4f --> S4g["g. EventPublisher.publishMessageSent()<br/>Kafka topic messages.sent"]
+
+    S4g --> S5["5. BotService.handleMessage()<br/>checks if bot should respond (async)"]
+    S5 --> S6["6. Response: MessageDto JSON"]
 ```
 
 #### Loading the Feed
@@ -374,19 +385,20 @@ Ingress:
 
 #### Bot Creating a Poll
 
-```
-1. User sends: "create a poll in remote workers: lunch day? options: Mon, Wed, Fri"
-2. BotService detects DM with bot → triggers response
-3. Context gathered: user's groups (includes "remote workers"), conversation history
-4. Ollama generates: "Done! [ACTION:CREATE_POLL|question=lunch day?|options=Mon,Wed,Fri|targetType=GROUP_FEED|targetId=remote workers]"
-5. parseAndExecuteActions():
-   a. Extracts CREATE_POLL action
-   b. resolveTargetWithType("remote workers") → finds group ID
-   c. BotActionService.createPollPost():
-      - Verifies user is group member
-      - Creates PostEntity with question as content
-      - Creates PollEntity with 3 PollOptionEntities
-6. Bot response saved as message (with action tag stripped)
+```mermaid
+graph TB
+    P1["1. User sends: create a poll in remote workers:<br/>lunch day? options: Mon, Wed, Fri"]
+    P1 --> P2["2. BotService detects DM with bot<br/>triggers response"]
+    P2 --> P3["3. Context gathered: user's groups<br/>(includes remote workers), conversation history"]
+    P3 --> P4["4. Ollama generates response with<br/>ACTION:CREATE_POLL tag"]
+    P4 --> P5["5. parseAndExecuteActions()"]
+    P5 --> P5a["a. Extracts CREATE_POLL action"]
+    P5a --> P5b["b. resolveTargetWithType: finds group ID"]
+    P5b --> P5c["c. BotActionService.createPollPost()"]
+    P5c --> V["Verifies user is group member"]
+    P5c --> CP["Creates PostEntity with question"]
+    P5c --> PO["Creates PollEntity with 3 PollOptionEntities"]
+    P5c --> P6["6. Bot response saved as message<br/>(action tag stripped)"]
 ```
 
 ### Mobile App Integration

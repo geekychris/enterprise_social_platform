@@ -7,8 +7,12 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/websocket-services: "social-app"
+    nginx.ingress.kubernetes.io/websocket-services: "ws-gateway"
     nginx.ingress.kubernetes.io/enable-websocket: "true"
+    # Sticky sessions for WebSocket gateway
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "ws-affinity"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/ws"
 spec:
   rules:
     - http:
@@ -24,9 +28,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: social-app
+                name: ws-gateway
                 port:
-                  number: 8080
+                  number: 8090
           - path: /actuator
             pathType: Prefix
             backend:

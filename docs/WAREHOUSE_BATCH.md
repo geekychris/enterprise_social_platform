@@ -2,69 +2,72 @@
 
 ## Architecture Overview
 
-```
-                          REAL-TIME PATH
-┌──────────┐    ┌───────┐    ┌───────────────┐    ┌─────────────────┐
-│ Social   │───▶│ Kafka │───▶│ Spark         │───▶│ Iceberg         │
-│ App      │    │       │    │ Consumer      │    │ Hourly Tables   │
-│          │    │       │    │ (30s batch)   │    │ (partitioned    │
-│ Entity   │    │ 9 CDC │    │               │    │  by event_hour) │
-│ changes  │    │ topics│    │               │    │                 │
-└──────────┘    └───────┘    └───────────────┘    └────────┬────────┘
-                                                           │
-                          BATCH PATH                       │
-                                                           ▼
-┌──────────┐    ┌────────────────────────────────────────────────────┐
-│ Airflow  │───▶│ Daily Rollup (02:00 UTC)                          │
-│ Scheduler│    │                                                    │
-│          │    │  1. Wait for hourly signals (sensor)               │
-│ DAGs:    │    │  2. Deduplicate: latest event per entity PK        │
-│ - rollup │    │  3. FULL OUTER JOIN with prior daily ALL           │
-│ - metrics│    │  4. Write new daily ALL partition                   │
-│ - setup  │    │  5. Write completion signal                        │
-│          │    │                                                    │
-│          │    │ Daily Metrics (04:00 UTC)                          │
-│          │    │  - Wait for rollup signals                         │
-│          │    │  - Compute DAU, WAU, MAU                           │
-│          │    │  - Compute daily posts, messages, reactions        │
-│          │    │  - Write to daily_metrics table                    │
-└──────────┘    └────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │ Iceberg          │
-                    │ Daily ALL Tables │
-                    │ (one row per     │
-                    │  entity, latest  │     ┌───────┐
-                    │  state)          │────▶│ Trino │──▶ Analysts
-                    │                  │     │ (SQL) │
-                    │ daily_metrics    │     └───────┘
-                    └──────────────────┘
+```mermaid
+graph TB
+    subgraph RT["REAL-TIME PATH"]
+        SocialApp["Social App<br/>(Entity changes)"] -->|CDC| Kafka["Kafka<br/>(9 CDC topics)"]
+        Kafka --> Spark["Spark Consumer<br/>(30s batch)"]
+        Spark --> HourlyTables["Iceberg Hourly Tables<br/>(partitioned by event_hour)"]
+    end
+
+    subgraph BP["BATCH PATH"]
+        Airflow["Airflow Scheduler<br/>DAGs: rollup, metrics, setup"]
+
+        subgraph Rollup["Daily Rollup (02:00 UTC)"]
+            R1["1. Wait for hourly signals"]
+            R2["2. Deduplicate: latest event per entity PK"]
+            R3["3. FULL OUTER JOIN with prior daily ALL"]
+            R4["4. Write new daily ALL partition"]
+            R5["5. Write completion signal"]
+            R1 --> R2 --> R3 --> R4 --> R5
+        end
+
+        subgraph Metrics["Daily Metrics (04:00 UTC)"]
+            M1["Wait for rollup signals"]
+            M2["Compute DAU, WAU, MAU"]
+            M3["Compute daily posts, messages, reactions"]
+            M4["Write to daily_metrics table"]
+            M1 --> M2 --> M3 --> M4
+        end
+
+        Airflow --> Rollup
+        Airflow --> Metrics
+    end
+
+    HourlyTables --> Rollup
+
+    Rollup --> DailyTables["Iceberg Daily ALL Tables<br/>(one row per entity, latest state)<br/>+ daily_metrics"]
+    Metrics --> DailyTables
+
+    DailyTables --> Trino["Trino (SQL)"]
+    Trino --> Analysts
 ```
 
 ## Table Hierarchy
 
 For each entity (users, posts, comments, etc.):
 
-```
-iceberg.worksphere.entityuser          ← Hourly incremental (Spark writes here)
-  Partitioned by: event_hour
-  May contain multiple versions of same entity per hour
-  Retained: 90 days
+```mermaid
+graph LR
+    subgraph Hourly["Hourly incremental (Spark writes)"]
+        EU["iceberg.worksphere.entityuser<br/>Partitioned by: event_hour<br/>Multiple versions per entity per hour<br/>Retained: 90 days"]
+    end
 
-iceberg.worksphere.user_daily          ← Daily ALL (Airflow writes here)
-  Partitioned by: event_date
-  One row per entity (latest state as of that day)
-  Full snapshot — every known entity appears
-  Retained: indefinitely
+    subgraph Daily["Daily ALL (Airflow writes)"]
+        UD["iceberg.worksphere.user_daily<br/>Partitioned by: event_date<br/>One row per entity (latest state)<br/>Full snapshot, retained indefinitely"]
+    end
 
-iceberg.worksphere.signals             ← Pipeline coordination
-  Tracks which tables/partitions are complete
-  Used by Airflow sensors for dependency management
+    subgraph Coordination["Pipeline coordination"]
+        SIG["iceberg.worksphere.signals<br/>Tracks table/partition completeness<br/>Used by Airflow sensors"]
+    end
 
-iceberg.worksphere.daily_metrics       ← Computed metrics
-  DAU, WAU, MAU, daily post/message/reaction counts
-  Partitioned by: metric_date
+    subgraph Metrics["Computed metrics"]
+        DM["iceberg.worksphere.daily_metrics<br/>DAU, WAU, MAU, daily counts<br/>Partitioned by: metric_date"]
+    end
+
+    EU --> UD
+    SIG --> UD
+    UD --> DM
 ```
 
 ## Entity CDC (Change Data Capture)
@@ -131,18 +134,17 @@ CREATE TABLE iceberg.worksphere.signals (
 
 ### Signal flow
 
-```
-Spark Consumer finishes hourly batch for entityuser:
-  → INSERT INTO signals ('entityuser', '2026-03-29', 'HOURLY_COMPLETE', now())
+```mermaid
+graph TB
+    SC["Spark Consumer finishes<br/>hourly batch for entityuser"]
+    SC -->|"INSERT INTO signals<br/>('entityuser', 'HOURLY_COMPLETE')"| SIG1["signals table:<br/>HOURLY_COMPLETE"]
 
-Airflow daily_entity_rollup DAG:
-  → Sensor: SELECT COUNT(*) FROM signals WHERE table_name='entityuser' AND signal_date='2026-03-29' AND signal_type='HOURLY_COMPLETE'
-  → Proceeds when count >= 1
-  → After rollup: INSERT INTO signals ('user_daily', '2026-03-29', 'DAILY_COMPLETE', now())
+    SIG1 --> SENSOR1["Airflow daily_entity_rollup DAG<br/>Sensor: SELECT COUNT(*) FROM signals<br/>WHERE HOURLY_COMPLETE"]
+    SENSOR1 -->|"count >= 1"| ROLLUP["Proceeds with rollup"]
+    ROLLUP -->|"INSERT INTO signals<br/>('user_daily', 'DAILY_COMPLETE')"| SIG2["signals table:<br/>DAILY_COMPLETE"]
 
-Airflow daily_metrics DAG:
-  → Sensor: waits for 'user_daily', 'post_daily', 'reaction_daily', 'message_daily' DAILY_COMPLETE signals
-  → Proceeds and computes DAU/MAU
+    SIG2 --> SENSOR2["Airflow daily_metrics DAG<br/>Sensor: waits for user_daily, post_daily,<br/>reaction_daily, message_daily DAILY_COMPLETE"]
+    SENSOR2 --> COMPUTE["Proceeds and computes DAU/MAU"]
 ```
 
 ## Daily Rollup Logic
@@ -197,23 +199,35 @@ WHERE COALESCE(c.event_type, '') != 'DELETE'
 
 ### DAG Dependencies
 
-```
-create_signal_table (one-time setup)
-        │
-        ▼
-daily_entity_rollup (02:00 UTC)
-  ├─ wait_entityuser → ensure_user_daily → rollup_user_daily → signal_user_daily
-  ├─ wait_entitypost → ensure_post_daily → rollup_post_daily → signal_post_daily
-  ├─ ... (9 entity chains in parallel)
-  └─ wait_entitymembership → ...
-        │
-        ▼ (signals)
-daily_metrics (04:00 UTC)
-  ├─ wait_for_entity_rollup (sensor on 4 key daily signals)
-  ├─ ensure_metrics_table
-  ├─ compute_dau / compute_wau / compute_mau (parallel)
-  ├─ compute_daily_posts / messages / reactions (parallel)
-  └─ signal_metrics_complete
+```mermaid
+graph TB
+    CST["create_signal_table<br/>(one-time setup)"]
+
+    CST --> DER["daily_entity_rollup<br/>(02:00 UTC)"]
+
+    DER --> WU["wait_entityuser"] --> EU["ensure_user_daily"] --> RU["rollup_user_daily"] --> SU["signal_user_daily"]
+    DER --> WP["wait_entitypost"] --> EP["ensure_post_daily"] --> RP["rollup_post_daily"] --> SP["signal_post_daily"]
+    DER --> WX["... (9 entity chains in parallel)"]
+    DER --> WM["wait_entitymembership"] --> EM["ensure_membership_daily"] --> RM["rollup_membership_daily"] --> SM["signal_membership_daily"]
+
+    SU -->|signals| DM["daily_metrics<br/>(04:00 UTC)"]
+    SP -->|signals| DM
+    SM -->|signals| DM
+
+    DM --> WAIT["wait_for_entity_rollup<br/>(sensor on 4 key daily signals)"]
+    DM --> EMT["ensure_metrics_table"]
+    WAIT --> CDAU["compute_dau"]
+    WAIT --> CWAU["compute_wau"]
+    WAIT --> CMAU["compute_mau"]
+    EMT --> CDP["compute_daily_posts"]
+    EMT --> CDM["compute_daily_messages"]
+    EMT --> CDR["compute_daily_reactions"]
+    CDAU --> SMC["signal_metrics_complete"]
+    CWAU --> SMC
+    CMAU --> SMC
+    CDP --> SMC
+    CDM --> SMC
+    CDR --> SMC
 ```
 
 ### Docker Services

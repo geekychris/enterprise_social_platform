@@ -1,0 +1,21 @@
+server:
+  port: ${WS_GATEWAY_PORT:8090}
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+gateway:
+  jwt:
+    secret: ${SOCIAL_JWT_SECRET:a-long-random-secret-key-for-development-only-change-in-production-please}
+  social-app:
+    url: ${SOCIAL_APP_URL:http://localhost:8080}
+  max-connections: ${WS_MAX_CONNECTIONS:50000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info

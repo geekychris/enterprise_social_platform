@@ -1,0 +1,68 @@
+# WebSocket Gateway (Netty, non-blocking)
+# Handles 10K-50K concurrent WebSocket connections per pod
+# Relays messages via Redis Pub/Sub across gateway instances
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ws-gateway
+  namespace: worksphere
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ws-gateway
+  template:
+    metadata:
+      labels:
+        app: ws-gateway
+    spec:
+      containers:
+        - name: ws-gateway
+          image: worksphere/ws-gateway:latest
+          ports:
+            - containerPort: 8090
+          env:
+            - name: WS_GATEWAY_PORT
+              value: "8090"
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: SOCIAL_APP_URL
+              value: "http://social-app:8080"
+            - name: SOCIAL_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: worksphere-secrets
+                  key: jwt-secret
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ws-gateway
+  namespace: worksphere
+spec:
+  selector:
+    app: ws-gateway
+  ports:
+    - port: 8090
+      targetPort: 8090

@@ -13,6 +13,7 @@ resources:
   - ollama.yaml
   - aoee.yaml
   - social-app.yaml
+  - ws-gateway.yaml
   - data-warehouse.yaml
   - airflow.yaml
   - frontend.yaml
