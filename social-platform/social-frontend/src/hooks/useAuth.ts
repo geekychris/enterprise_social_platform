@@ -8,6 +8,7 @@ export function useAuth() {
     username: store.username,
     debugMode: store.debugMode,
     isAdmin: store.isAdmin,
+    token: store.token,
     login: store.login,
     loginDebug: store.loginDebug,
     logout: store.logout,

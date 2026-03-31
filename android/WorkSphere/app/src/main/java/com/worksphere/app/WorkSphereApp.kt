@@ -1,6 +1,8 @@
 package com.worksphere.app
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.LaunchedEffect
+import com.worksphere.app.data.WebSocketService
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
@@ -82,6 +84,11 @@ fun WorkSphereApp() {
     if (!isAuthenticated) {
         LoginScreen()
         return
+    }
+
+    // Connect WebSocket gateway as soon as user is authenticated
+    LaunchedEffect(Unit) {
+        WebSocketService.connect()
     }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity

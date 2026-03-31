@@ -14,6 +14,8 @@ struct MessageThreadView: View {
     @State private var summaryLoading = false
     @State private var summaryError: String?
 
+    private let ws = WebSocketService.shared
+
     var body: some View {
         VStack(spacing: 0) {
             // AI Assistant
@@ -130,7 +132,33 @@ struct MessageThreadView: View {
             await loadMessages()
             markRead()
         }
-        .task { await pollMessages() }
+        .task {
+            // Subscribe to real-time messages via WebSocket gateway
+            // When a push arrives, reload messages from REST (guarantees correct parsing)
+            ws.connect()
+            ws.subscribe(conversationId: conversationId, onMessage: { _ in
+                Task { await loadMessages() }
+            })
+        }
+        .onDisappear {
+            ws.unsubscribe(conversationId: conversationId)
+        }
+        .task {
+            // Also listen for any message on any conversation (for when we're auto-subscribed)
+            ws.onAnyMessage = { convId, _ in
+                if convId == conversationId {
+                    Task { await loadMessages() }
+                }
+            }
+        }
+        .task {
+            // Fallback polling (slower rate when WS is connected)
+            while !Task.isCancelled {
+                let interval: Duration = ws.isConnected ? .seconds(30) : .seconds(5)
+                try? await Task.sleep(for: interval)
+                await loadMessages()
+            }
+        }
     }
 
     private var displayName: String {
@@ -150,15 +178,12 @@ struct MessageThreadView: View {
     private func loadMessages() async {
         do {
             let msgs: [MessageDto] = try await APIClient.shared.get("/conversations/\(conversationId)/messages")
-            messages = msgs.reversed()
+            let sorted = msgs.reversed()
+            // Merge: keep any optimistically-added messages that haven't synced yet
+            let existingIds = Set(sorted.map(\.id))
+            let pending = messages.filter { !existingIds.contains($0.id) }
+            messages = Array(sorted) + pending
         } catch {}
-    }
-
-    private func pollMessages() async {
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(3))
-            await loadMessages()
-        }
     }
 
     private func markRead() {
@@ -184,13 +209,20 @@ struct MessageThreadView: View {
     }
 
     private func sendMessage() {
-        let text = messageText
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
         messageText = ""
         sending = true
+
+        // Always send via REST (guarantees persistence + returns the saved MessageDto)
+        // WebSocket is used for receiving real-time pushes, not for sending
         Task {
             do {
-                let _: MessageDto = try await APIClient.shared.post("/conversations/\(conversationId)/messages", body: ["content": text])
-                await loadMessages()
+                let msg: MessageDto = try await APIClient.shared.post("/conversations/\(conversationId)/messages", body: ["content": text])
+                // Optimistically add to local list immediately
+                if !messages.contains(where: { $0.id == msg.id }) {
+                    messages.append(msg)
+                }
             } catch {}
             sending = false
         }

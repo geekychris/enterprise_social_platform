@@ -12,18 +12,25 @@ import java.util.Map;
 public class GatewayInfoController {
 
     private final ConnectionRegistry registry;
+    private final int maxConnections;
 
-    public GatewayInfoController(ConnectionRegistry registry) {
+    public GatewayInfoController(ConnectionRegistry registry,
+                                  @org.springframework.beans.factory.annotation.Value("${gateway.max-connections:100000}") int maxConnections) {
         this.registry = registry;
+        this.maxConnections = maxConnections;
     }
 
     @GetMapping("/info")
     public Map<String, Object> info() {
+        int current = registry.getTotalConnections();
         return Map.of(
                 "service", "ws-gateway",
                 "engine", "Netty (non-blocking)",
-                "connections", registry.getTotalConnections(),
-                "uniqueUsers", registry.getTotalUsers()
+                "connections", current,
+                "maxConnections", maxConnections,
+                "utilization", String.format("%.1f%%", (current * 100.0) / maxConnections),
+                "uniqueUsers", registry.getTotalUsers(),
+                "eventLoopThreads", Runtime.getRuntime().availableProcessors()
         );
     }
 

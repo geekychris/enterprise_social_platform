@@ -9,6 +9,8 @@ struct ConversationsView: View {
     @State private var navigateToBotConvId: Int64?
     @State private var loadingBot = false
 
+    private let ws = WebSocketService.shared
+
     var body: some View {
         List {
             // Chat with Roid button
@@ -42,6 +44,11 @@ struct ConversationsView: View {
             MessageThreadView(conversationId: nav.conversationId)
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Circle()
+                    .fill(ws.isConnected ? .green : .orange)
+                    .frame(width: 8, height: 8)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showNewConversation = true } label: {
                     Image(systemName: "square.and.pencil")
@@ -69,7 +76,20 @@ struct ConversationsView: View {
         }
         .refreshable { await load() }
         .task { await load() }
-        .task { await poll() }
+        .task {
+            ws.connect()
+            ws.onAnyMessage = { _, _ in
+                Task { await load() }
+            }
+        }
+        .task {
+            // Fallback polling
+            while !Task.isCancelled {
+                let interval: Duration = ws.isConnected ? .seconds(30) : .seconds(10)
+                try? await Task.sleep(for: interval)
+                await load()
+            }
+        }
     }
 
     private func load() async {
@@ -77,13 +97,6 @@ struct ConversationsView: View {
             conversations = try await APIClient.shared.get("/conversations")
         } catch {}
         loading = false
-    }
-
-    private func poll() async {
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(10))
-            await load()
-        }
     }
 
     private func startBotChat() {

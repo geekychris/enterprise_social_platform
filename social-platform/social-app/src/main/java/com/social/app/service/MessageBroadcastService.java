@@ -28,6 +28,7 @@ public class MessageBroadcastService {
         this.redisTemplate = redisTemplate;
         this.participantRepo = participantRepo;
         this.objectMapper = new ObjectMapper();
+        this.objectMapper.findAndRegisterModules(); // Java 8 time (Instant, LocalDate, etc.)
     }
 
     /**

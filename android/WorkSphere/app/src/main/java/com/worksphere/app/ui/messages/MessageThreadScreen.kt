@@ -21,7 +21,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.worksphere.app.data.*
+import com.worksphere.app.data.WebSocketService
 import com.worksphere.app.ui.components.Avatar
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3Api::class)
@@ -38,6 +40,7 @@ fun MessageThreadScreen(
     var isLoading by remember { mutableStateOf(true) }
     val listState = rememberLazyListState()
     val currentUserId = AuthService.userId
+    val wsConnected by WebSocketService.isConnected.collectAsState()
 
     LaunchedEffect(conversationId) {
         try {
@@ -45,6 +48,48 @@ fun MessageThreadScreen(
             messages = ApiClient.get<List<MessageDto>>("/conversations/$conversationId/messages")
         } catch (_: Exception) { }
         isLoading = false
+    }
+
+    // WebSocket real-time subscription — reload from REST when push arrives
+    LaunchedEffect(conversationId) {
+        WebSocketService.connect()
+        WebSocketService.subscribe(conversationId, onMessage = { _ ->
+            scope.launch {
+                try {
+                    messages = ApiClient.get<List<MessageDto>>("/conversations/$conversationId/messages")
+                } catch (_: Exception) { }
+            }
+        })
+    }
+
+    // Also listen for any message (auto-subscribed conversations)
+    LaunchedEffect(conversationId) {
+        WebSocketService.onAnyMessage = { convId, _ ->
+            if (convId == conversationId) {
+                scope.launch {
+                    try {
+                        messages = ApiClient.get<List<MessageDto>>("/conversations/$conversationId/messages")
+                    } catch (_: Exception) { }
+                }
+            }
+        }
+    }
+
+    // Cleanup on leave
+    DisposableEffect(conversationId) {
+        onDispose {
+            WebSocketService.unsubscribe(conversationId)
+        }
+    }
+
+    // Fallback polling (slower when WS connected)
+    LaunchedEffect(conversationId, wsConnected) {
+        while (true) {
+            delay(if (wsConnected) 30_000L else 5_000L)
+            try {
+                messages = ApiClient.get<List<MessageDto>>("/conversations/$conversationId/messages")
+            } catch (_: Exception) { }
+        }
     }
 
     // Scroll to bottom when new messages arrive
@@ -58,13 +103,19 @@ fun MessageThreadScreen(
         val text = inputText.trim()
         if (text.isBlank()) return
         inputText = ""
+
+        // Always send via REST (guarantees persistence + returns saved MessageDto)
+        // WebSocket is used for receiving real-time pushes, not for sending
         scope.launch {
             try {
                 val msg = ApiClient.post<MessageDto>(
                     "/conversations/$conversationId/messages",
                     mapOf("content" to text)
                 )
-                messages = listOf(msg) + messages
+                // Optimistically add to local list immediately
+                if (messages.none { it.id == msg.id }) {
+                    messages = listOf(msg) + messages
+                }
             } catch (_: Exception) { }
         }
     }

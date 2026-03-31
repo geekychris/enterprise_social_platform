@@ -38,16 +38,19 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
     private final JwtService jwtService;
     private final WebClient socialAppClient;
     private final ObjectMapper objectMapper;
+    private final int maxConnections;
 
     public GatewayWebSocketHandler(ConnectionRegistry registry,
                                     RedisMessageRelay redisRelay,
                                     JwtService jwtService,
-                                    @Value("${gateway.social-app.url}") String socialAppUrl) {
+                                    @Value("${gateway.social-app.url}") String socialAppUrl,
+                                    @Value("${gateway.max-connections:100000}") int maxConnections) {
         this.registry = registry;
         this.redisRelay = redisRelay;
         this.jwtService = jwtService;
         this.socialAppClient = WebClient.builder().baseUrl(socialAppUrl).build();
         this.objectMapper = new ObjectMapper();
+        this.maxConnections = maxConnections;
     }
 
     @Override
@@ -60,6 +63,13 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
             ))).then(session.close());
         }
 
+        // Enforce connection limit
+        if (registry.getTotalConnections() >= maxConnections) {
+            return session.send(Mono.just(session.textMessage(
+                    "{\"type\":\"ERROR\",\"message\":\"Server at capacity\"}"
+            ))).then(session.close());
+        }
+
         registry.register(session, userId);
 
         // Send connected confirmation
@@ -69,13 +79,34 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
 
         Mono<Void> sendConnected = session.send(Mono.just(session.textMessage(connectedMsg)));
 
+        // Auto-subscribe to all user's conversations
+        Mono<Void> autoSubscribe = socialAppClient.get()
+                .uri("/api/conversations")
+                .header("X-Debug-User-Id", String.valueOf(userId))
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .doOnNext(convList -> {
+                    if (convList.isArray()) {
+                        for (JsonNode conv : convList) {
+                            long convId = conv.get("id").asLong();
+                            registry.subscribeToConversation(session, convId);
+                        }
+                        log.debug("Auto-subscribed user {} to {} conversations", userId, convList.size());
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.debug("Failed to auto-subscribe conversations for user {}: {}", userId, e.getMessage());
+                    return Mono.empty();
+                })
+                .then();
+
         // Handle incoming messages
         Mono<Void> receiveMessages = session.receive()
                 .map(WebSocketMessage::getPayloadAsText)
                 .flatMap(payload -> handleClientMessage(session, userId, payload))
                 .then();
 
-        return sendConnected.then(receiveMessages)
+        return sendConnected.then(autoSubscribe).then(receiveMessages)
                 .doFinally(sig -> registry.unregister(session));
     }
 

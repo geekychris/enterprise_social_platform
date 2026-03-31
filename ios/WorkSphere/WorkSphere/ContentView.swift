@@ -6,6 +6,10 @@ struct ContentView: View {
     var body: some View {
         if auth.isAuthenticated {
             AdaptiveMainView()
+                .task {
+                    // Connect WebSocket gateway as soon as user is authenticated
+                    WebSocketService.shared.connect()
+                }
         } else {
             LoginView()
         }

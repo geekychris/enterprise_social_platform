@@ -16,8 +16,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import com.worksphere.app.data.*
+import com.worksphere.app.data.WebSocketService
 import com.worksphere.app.ui.components.Avatar
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -32,12 +36,35 @@ fun ConversationsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showNewDialog by remember { mutableStateOf(false) }
     var newConvoUsername by remember { mutableStateOf("") }
+    val wsConnected by WebSocketService.isConnected.collectAsState()
 
     LaunchedEffect(Unit) {
         try {
             conversations = ApiClient.get<List<ConversationDto>>("/conversations")
         } catch (_: Exception) { }
         isLoading = false
+    }
+
+    // Connect WebSocket and listen for any new message
+    LaunchedEffect(Unit) {
+        WebSocketService.connect()
+        WebSocketService.onAnyMessage = { _, _ ->
+            scope.launch {
+                try {
+                    conversations = ApiClient.get<List<ConversationDto>>("/conversations")
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
+    // Fallback polling
+    LaunchedEffect(wsConnected) {
+        while (true) {
+            delay(if (wsConnected) 30_000L else 10_000L)
+            try {
+                conversations = ApiClient.get<List<ConversationDto>>("/conversations")
+            } catch (_: Exception) { }
+        }
     }
 
     if (showNewDialog) {
@@ -81,6 +108,22 @@ fun ConversationsScreen(
     }
 
     Scaffold(
+        topBar = {
+            @OptIn(ExperimentalMaterial3Api::class)
+            TopAppBar(
+                title = { Text("Messages", style = MaterialTheme.typography.titleMedium) },
+                actions = {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                color = if (wsConnected) Color(0xFF22C55E) else Color(0xFFF59E0B),
+                                shape = CircleShape
+                            )
+                    )
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showNewDialog = true },

@@ -1,8 +1,12 @@
 import Header from './Header';
 import Sidebar from './Sidebar';
 import RightPanel from './RightPanel';
+import { useWebSocket } from '../../hooks/useWebSocket';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  // Connect to WebSocket gateway for real-time message delivery
+  useWebSocket();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
