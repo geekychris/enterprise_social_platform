@@ -11,7 +11,7 @@
   },
   "warehouse": {
     "table_name": "warehouse.messages_hourly",
-    "partition_by": ["event_hour"],
+    "partition_by": ["tenant_id", "event_hour"],
     "sort_by": ["event_timestamp", "id"],
     "retention_days": 90
   },
@@ -20,6 +20,7 @@
     {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
     {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
     {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+    {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
     {"name": "id", "type": "long", "required": true, "description": "Message ID"},
     {"name": "conversation_id", "type": "long", "required": true, "description": "Conversation ID"},
     {"name": "sender_id", "type": "long", "required": true, "description": "Sender user ID"},

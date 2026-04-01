@@ -68,7 +68,7 @@ struct PhoneTabView: View {
             NavigationStack {
                 MoreView()
             }
-            .tabItem { Label("More", systemImage: "ellipsis") }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
             .badge(unreadNotifications)
         }
         .task { await pollUnread() }
@@ -354,9 +354,29 @@ extension View {
 
 struct MoreView: View {
     @Environment(AuthService.self) private var auth
+    @State private var currentUser: UserDto?
 
     var body: some View {
         List {
+            // User info header
+            Section {
+                if let user = currentUser {
+                    HStack(spacing: 12) {
+                        AvatarView(url: user.avatarUrl, name: user.displayName, size: 50)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.displayName).font(.headline)
+                            Text("@\(user.username)").font(.caption).foregroundStyle(.secondary)
+                            if let tenantId = auth.tenantId, tenantId != "1" {
+                                Text("Tenant: \(tenantId)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
             Section {
                 NavigationLink(value: ProfileNav(userId: auth.userId ?? 0)) {
                     Label("My Profile", systemImage: "person.circle")
@@ -365,13 +385,22 @@ struct MoreView: View {
                     Label("Notifications", systemImage: "bell")
                 }
             }
+
             Section {
-                Button(role: .destructive) { auth.logout() } label: {
+                Button(role: .destructive) {
+                    WebSocketService.shared.disconnect()
+                    auth.logout()
+                } label: {
                     Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
         }
-        .navigationTitle("More")
+        .navigationTitle("Settings")
+        .task {
+            if let userId = auth.userId {
+                currentUser = try? await APIClient.shared.get("/users/\(userId)")
+            }
+        }
         .navigationDestination(for: ProfileNav.self) { nav in
             ProfileView(userId: nav.userId)
         }

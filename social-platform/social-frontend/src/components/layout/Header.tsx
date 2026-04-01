@@ -3,11 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../stores/authStore';
+import { useTenantBranding } from '../../hooks/useTenantBranding';
 import SearchBar from '../search/SearchBar';
 import api from '../../api/client';
 
 export default function Header() {
   const { username, userId, debugMode, logout } = useAuth();
+  const branding = useTenantBranding();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -78,7 +80,16 @@ export default function Header() {
         to="/"
         className="flex items-center shrink-0"
       >
-        <img src="/worksphere-logo.jpg" alt="WorkSphere" className="h-16 w-auto object-contain" />
+        {branding.logoUrl ? (
+          <img src={branding.logoUrl} alt={branding.companyName} className="h-16 w-auto object-contain" />
+        ) : (
+          <>
+            <img src="/worksphere-logo.jpg" alt={branding.companyName} className="h-10 w-auto object-contain" />
+            <span className="ml-2 text-lg font-bold hidden sm:inline" style={{ color: branding.primaryColor }}>
+              {branding.companyName}
+            </span>
+          </>
+        )}
       </Link>
 
       {/* Search */}

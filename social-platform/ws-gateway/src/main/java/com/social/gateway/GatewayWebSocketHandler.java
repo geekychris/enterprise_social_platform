@@ -55,13 +55,15 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
-        // Extract auth from query params: /ws?token=JWT or /ws?userId=DEBUG_ID
+        // Extract auth from query params: /ws?token=JWT&tenant=1 or /ws?userId=DEBUG_ID&tenant=1
         Long userId = extractUserId(session);
         if (userId == null) {
             return session.send(Mono.just(session.textMessage(
                     "{\"type\":\"ERROR\",\"message\":\"Authentication required. Pass ?token=JWT or ?userId=ID\"}"
             ))).then(session.close());
         }
+
+        Long tenantId = extractTenantId(session);
 
         // Enforce connection limit
         if (registry.getTotalConnections() >= maxConnections) {
@@ -70,7 +72,7 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
             ))).then(session.close());
         }
 
-        registry.register(session, userId);
+        registry.register(session, userId, tenantId);
 
         // Send connected confirmation
         String connectedMsg = String.format(
@@ -83,6 +85,7 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
         Mono<Void> autoSubscribe = socialAppClient.get()
                 .uri("/api/conversations")
                 .header("X-Debug-User-Id", String.valueOf(userId))
+                .header("X-Tenant-Id", tenantId != null ? String.valueOf(tenantId) : "")
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .doOnNext(convList -> {
@@ -137,9 +140,11 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
         String content = msg.has("content") ? msg.get("content").asText() : "";
 
         // Delegate to social app REST API for persistence + business logic
+        Long tenantId = registry.getTenantId(session);
         return socialAppClient.post()
                 .uri("/api/conversations/{id}/messages", conversationId)
                 .header("X-Debug-User-Id", String.valueOf(userId))
+                .header("X-Tenant-Id", tenantId != null ? String.valueOf(tenantId) : "")
                 .bodyValue(new SendMessageRequest(content))
                 .retrieve()
                 .bodyToMono(String.class)
@@ -174,6 +179,22 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
     private Mono<Void> sendError(WebSocketSession session, String message) {
         String errorMsg = String.format("{\"type\":\"ERROR\",\"message\":\"%s\"}", message.replace("\"", "'"));
         return session.send(Mono.just(session.textMessage(errorMsg)));
+    }
+
+    private Long extractTenantId(WebSocketSession session) {
+        String query = session.getHandshakeInfo().getUri().getQuery();
+        if (query == null) return null;
+
+        for (String param : query.split("&")) {
+            if (param.startsWith("tenant=")) {
+                try {
+                    return Long.parseLong(param.substring(7));
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     private Long extractUserId(WebSocketSession session) {

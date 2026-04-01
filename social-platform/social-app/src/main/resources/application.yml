@@ -16,6 +16,18 @@ spring:
     username: social
     password:
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+
+  # Read replica (optional — falls back to primary if not configured)
+  # Set REPLICA_DATASOURCE_URL to enable read routing
+  replica:
+    enabled: ${REPLICA_ENABLED:false}
+    url: ${REPLICA_DATASOURCE_URL:}
+    username: ${REPLICA_DATASOURCE_USERNAME:social}
+    password: ${REPLICA_DATASOURCE_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: validate

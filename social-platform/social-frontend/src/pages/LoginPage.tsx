@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import api from '../api/client';
+
+interface TenantOption {
+  id: number;
+  name: string;
+  slug: string;
+  plan: string;
+}
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register' | 'debug'>('login');
@@ -13,8 +20,26 @@ export default function LoginPage() {
   const [debugUserId, setDebugUserId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [selectedTenant, setSelectedTenant] = useState(localStorage.getItem('tenantId') || '1');
   const { login, loginDebug } = useAuth();
   const navigate = useNavigate();
+
+  // Fetch available tenants
+  useEffect(() => {
+    api.get('/tenants/list')
+      .then(({ data }) => {
+        setTenants(data);
+      })
+      .catch(() => {
+        setTenants([]);
+      });
+  }, []);
+
+  // Store tenant selection
+  useEffect(() => {
+    localStorage.setItem('tenantId', selectedTenant);
+  }, [selectedTenant]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +102,52 @@ export default function LoginPage() {
             Connect with your team
           </p>
         </div>
+
+        {/* Tenant selector */}
+        {tenants.length > 1 && (
+          <div className="mb-4 bg-white rounded-lg border border-gray-200 p-4">
+            <label className="block text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">
+              Organization
+            </label>
+            <div className="grid gap-2">
+              {tenants.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedTenant(String(t.id))}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-all ${
+                    selectedTenant === String(t.id)
+                      ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`w-3 h-3 rounded-full ${selectedTenant === String(t.id) ? 'bg-primary-500' : 'bg-gray-300'}`} />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm text-gray-900">{t.name}</div>
+                    <div className="text-xs text-gray-400">{t.slug}.worksphere.com</div>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    t.plan === 'enterprise' ? 'bg-purple-100 text-purple-600' :
+                    t.plan === 'pro' ? 'bg-blue-100 text-blue-600' :
+                    'bg-gray-100 text-gray-500'
+                  }`}>{t.plan}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Manual tenant ID input (when tenant list not available) */}
+        {tenants.length <= 1 && (
+          <div className="mb-4 bg-white rounded-lg border border-gray-200 p-3">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Tenant ID</label>
+            <input
+              value={selectedTenant}
+              onChange={(e) => setSelectedTenant(e.target.value)}
+              className="w-full border rounded px-3 py-1.5 text-sm font-mono"
+              placeholder="1"
+            />
+          </div>
+        )}
 
         {/* Mode tabs */}
         <div className="flex bg-white rounded-t-lg border border-b-0 border-gray-200">

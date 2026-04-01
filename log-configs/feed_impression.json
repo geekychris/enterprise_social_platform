@@ -11,13 +11,14 @@
   },
   "warehouse": {
     "table_name": "analytics.feed_impressions",
-    "partition_by": ["event_date"],
+    "partition_by": ["tenant_id", "event_date"],
     "sort_by": ["timestamp", "user_id"],
     "retention_days": 90
   },
   "fields": [
     {"name": "timestamp", "type": "timestamp", "required": true, "description": "Event timestamp"},
     {"name": "event_date", "type": "date", "required": true, "description": "Partition date"},
+    {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
     {"name": "user_id", "type": "long", "required": true, "description": "Viewing user ID"},
     {"name": "post_id", "type": "long", "required": true, "description": "Post shown"},
     {"name": "author_id", "type": "long", "required": true, "description": "Post author ID"},

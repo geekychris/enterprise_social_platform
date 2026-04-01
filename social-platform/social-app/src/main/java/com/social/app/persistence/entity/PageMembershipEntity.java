@@ -1,6 +1,7 @@
 package com.social.app.persistence.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
@@ -8,6 +9,7 @@ import java.util.Objects;
 @Entity
 @Table(name = "page_memberships")
 @IdClass(PageMembershipEntity.PageMembershipId.class)
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class PageMembershipEntity {
 
     @Id
@@ -48,6 +50,12 @@ public class PageMembershipEntity {
 
     public Instant getJoinedAt() { return joinedAt; }
     public void setJoinedAt(Instant joinedAt) { this.joinedAt = joinedAt; }
+
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
     public static class PageMembershipId implements Serializable {
         private Long userId;

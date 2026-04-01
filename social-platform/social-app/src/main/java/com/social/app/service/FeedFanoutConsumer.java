@@ -58,13 +58,17 @@ public class FeedFanoutConsumer {
 
         recipients.add(authorId); // Author sees own posts
 
+        // Extract tenant from postId (bits 40-55 encode tenant)
+        int tenant = (int)((postId >> 40) & 0xFFFF);
+
         // Fan out to each user's feed (Redis sorted set + DB)
         double score = System.currentTimeMillis();
         for (Long userId : recipients) {
-            // Redis: ZADD feed:{userId} {score} {postId}
-            redis.opsForZSet().add("feed:" + userId, String.valueOf(postId), score);
+            // Redis: ZADD feed:{tenant}:{userId} {score} {postId}
+            String feedKey = "feed:" + tenant + ":" + userId;
+            redis.opsForZSet().add(feedKey, String.valueOf(postId), score);
             // Trim to max 500 entries
-            redis.opsForZSet().removeRange("feed:" + userId, 0, -501);
+            redis.opsForZSet().removeRange(feedKey, 0, -501);
         }
 
         // Also store in DB for persistence

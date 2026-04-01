@@ -48,8 +48,8 @@ public class RedisMessageRelay {
         RedisPubSubReactiveCommands<String, String> reactive = pubSubConnection.reactive();
 
         // First subscribe to the pattern, then observe
-        reactive.psubscribe("conversation:*").doOnSuccess(v ->
-            log.info("Redis psubscribe confirmed for conversation:*")
+        reactive.psubscribe("*:conversation:*").doOnSuccess(v ->
+            log.info("Redis psubscribe confirmed for *:conversation:*")
         ).subscribe();
 
         subscription = reactive.observePatterns()
@@ -59,7 +59,10 @@ public class RedisMessageRelay {
                         String payload = message.getMessage();
                         log.info("Redis relay received on channel: {}", channel);
 
-                        long conversationId = Long.parseLong(channel.substring(channel.indexOf(':') + 1));
+                        // Channel format: {tenantId}:conversation:{conversationId}
+                        String[] parts = channel.split(":");
+                        // parts[0] = tenantId, parts[1] = "conversation", parts[2] = conversationId
+                        long conversationId = Long.parseLong(parts[2]);
 
                         Set<WebSocketSession> sessions = registry.getSessionsForConversation(conversationId);
                         log.info("Found {} sessions for conversation {}", sessions.size(), conversationId);
@@ -87,7 +90,7 @@ public class RedisMessageRelay {
                 .doOnError(e -> log.error("Redis observePatterns error: {}", e.getMessage()))
                 .subscribe();
 
-        log.info("Redis message relay started (pSubscribe: conversation:*)");
+        log.info("Redis message relay started (pSubscribe: *:conversation:*)");
     }
 
     @PreDestroy

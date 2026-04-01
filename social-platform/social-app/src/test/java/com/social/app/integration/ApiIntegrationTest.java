@@ -46,6 +46,7 @@ class ApiIntegrationTest {
     void setUp() throws Exception {
         // Find a user to test with
         MvcResult result = mvc.perform(get("/api/users/search?q=a")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", "72057594037928142"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -59,6 +60,7 @@ class ApiIntegrationTest {
 
         // Get bot info
         MvcResult botResult = mvc.perform(get("/api/ai/bot/info")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -77,6 +79,7 @@ class ApiIntegrationTest {
     @Order(1)
     void feedReturnsPostsWithPagination() throws Exception {
         MvcResult result = mvc.perform(get("/api/feed?limit=5")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -95,6 +98,7 @@ class ApiIntegrationTest {
     @Order(2)
     void feedHasRateLimitHeaders() throws Exception {
         mvc.perform(get("/api/feed?limit=1")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-RateLimit-Limit"))
@@ -114,6 +118,7 @@ class ApiIntegrationTest {
         ));
 
         MvcResult result = mvc.perform(post("/api/posts")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -134,6 +139,7 @@ class ApiIntegrationTest {
     @Order(11)
     void getPostById() throws Exception {
         mvc.perform(get("/api/posts/" + testPostId)
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").exists())
@@ -149,6 +155,7 @@ class ApiIntegrationTest {
         ));
 
         mvc.perform(post("/api/reactions")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -164,6 +171,7 @@ class ApiIntegrationTest {
         ));
 
         mvc.perform(post("/api/comments")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -175,6 +183,7 @@ class ApiIntegrationTest {
     @Order(14)
     void getPostComments() throws Exception {
         mvc.perform(get("/api/posts/" + testPostId + "/comments")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -187,6 +196,7 @@ class ApiIntegrationTest {
     @Order(20)
     void createDirectConversation() throws Exception {
         MvcResult result = mvc.perform(post("/api/conversations/direct/" + botUserId)
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -208,6 +218,7 @@ class ApiIntegrationTest {
         ));
 
         mvc.perform(post("/api/conversations/" + testConversationId + "/messages")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -220,6 +231,7 @@ class ApiIntegrationTest {
     @Order(22)
     void getConversationMessages() throws Exception {
         mvc.perform(get("/api/conversations/" + testConversationId + "/messages")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -228,6 +240,7 @@ class ApiIntegrationTest {
     @Order(23)
     void listConversations() throws Exception {
         mvc.perform(get("/api/conversations")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -236,6 +249,7 @@ class ApiIntegrationTest {
     @Order(24)
     void markConversationRead() throws Exception {
         mvc.perform(post("/api/conversations/" + testConversationId + "/read")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -244,6 +258,7 @@ class ApiIntegrationTest {
     @Order(25)
     void getUnreadCount() throws Exception {
         MvcResult result = mvc.perform(get("/api/messages/unread-count")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -262,6 +277,7 @@ class ApiIntegrationTest {
         ));
 
         mvc.perform(post("/api/catchup")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -277,6 +293,7 @@ class ApiIntegrationTest {
     @Order(30)
     void searchAll() throws Exception {
         mvc.perform(get("/api/search?q=test")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hits").exists());
@@ -286,6 +303,7 @@ class ApiIntegrationTest {
     @Order(31)
     void searchByType() throws Exception {
         mvc.perform(get("/api/search?q=a&type=GROUP")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hits").exists());
@@ -299,6 +317,7 @@ class ApiIntegrationTest {
     @Order(40)
     void getUserGroups() throws Exception {
         mvc.perform(get("/api/groups/mine")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -311,6 +330,7 @@ class ApiIntegrationTest {
     @Order(50)
     void getOrgRoots() throws Exception {
         mvc.perform(get("/api/org/units")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -319,6 +339,7 @@ class ApiIntegrationTest {
     @Order(51)
     void getUserOrgAssignments() throws Exception {
         mvc.perform(get("/api/org/assignments/user/" + testUserId)
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -331,6 +352,7 @@ class ApiIntegrationTest {
     @Order(60)
     void getNotifications() throws Exception {
         mvc.perform(get("/api/notifications?limit=10")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -339,6 +361,7 @@ class ApiIntegrationTest {
     @Order(61)
     void getNotificationUnreadCount() throws Exception {
         mvc.perform(get("/api/notifications/unread-count")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -351,6 +374,7 @@ class ApiIntegrationTest {
     @Order(70)
     void getUserProfile() throws Exception {
         mvc.perform(get("/api/users/" + testUserId)
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").exists())
@@ -361,6 +385,7 @@ class ApiIntegrationTest {
     @Order(71)
     void searchUsers() throws Exception {
         mvc.perform(get("/api/users/search?q=a")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk());
     }
@@ -373,6 +398,7 @@ class ApiIntegrationTest {
     @Order(80)
     void getBotInfo() throws Exception {
         mvc.perform(get("/api/ai/bot/info")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").exists())
@@ -393,6 +419,7 @@ class ApiIntegrationTest {
         ));
 
         MvcResult postResult = mvc.perform(post("/api/posts")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(postBody))
@@ -413,6 +440,7 @@ class ApiIntegrationTest {
         ));
 
         MvcResult pollResult = mvc.perform(post("/api/polls")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(pollBody))
@@ -432,6 +460,7 @@ class ApiIntegrationTest {
         ));
 
         mvc.perform(post("/api/polls/" + pollId + "/vote")
+                        .header("X-Tenant-Id", "1")
                         .header("X-Debug-User-Id", String.valueOf(testUserId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(voteBody))

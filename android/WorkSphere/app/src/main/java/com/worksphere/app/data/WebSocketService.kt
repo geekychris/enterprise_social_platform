@@ -47,6 +47,7 @@ object WebSocketService {
         ApiClient.token?.let { urlBuilder.append("?token=$it") }
             ?: ApiClient.debugUserId?.let { urlBuilder.append("?userId=$it") }
             ?: return // No auth
+        ApiClient.tenantId?.let { urlBuilder.append("&tenant=$it") }
 
         val request = Request.Builder().url(urlBuilder.toString()).build()
 

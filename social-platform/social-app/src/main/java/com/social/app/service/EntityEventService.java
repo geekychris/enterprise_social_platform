@@ -3,6 +3,7 @@ package com.social.app.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.social.app.tenant.TenantContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
@@ -186,6 +187,9 @@ public class EntityEventService {
         try {
             Instant now = Instant.now();
             String eventHour = now.atOffset(ZoneOffset.UTC).format(HOUR_FMT);
+
+            // Add tenant context
+            entityData.put("tenant_id", TenantContext.getTenantId());
 
             // Add event metadata to data
             entityData.put("event_type", eventType);

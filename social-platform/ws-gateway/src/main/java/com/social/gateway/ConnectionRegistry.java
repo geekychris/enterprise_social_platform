@@ -33,17 +33,27 @@ public class ConnectionRegistry {
     // session → userId (reverse lookup for cleanup)
     private final Map<String, Long> sessionToUser = new ConcurrentHashMap<>();
 
+    // session → tenantId
+    private final Map<String, Long> sessionToTenant = new ConcurrentHashMap<>();
+
     // session → subscribed conversations (for cleanup)
     private final Map<String, Set<Long>> sessionConversations = new ConcurrentHashMap<>();
 
     private final AtomicInteger totalConnections = new AtomicInteger(0);
 
     public void register(WebSocketSession session, long userId) {
+        register(session, userId, null);
+    }
+
+    public void register(WebSocketSession session, long userId, Long tenantId) {
         sessionToUser.put(session.getId(), userId);
+        if (tenantId != null) {
+            sessionToTenant.put(session.getId(), tenantId);
+        }
         userSessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
         sessionConversations.put(session.getId(), new CopyOnWriteArraySet<>());
         int total = totalConnections.incrementAndGet();
-        log.debug("User {} connected (session {}). Total: {}", userId, session.getId(), total);
+        log.debug("User {} (tenant {}) connected (session {}). Total: {}", userId, tenantId, session.getId(), total);
     }
 
     public void subscribeToConversation(WebSocketSession session, long conversationId) {
@@ -55,6 +65,7 @@ public class ConnectionRegistry {
     public void unregister(WebSocketSession session) {
         String sessionId = session.getId();
         Long userId = sessionToUser.remove(sessionId);
+        sessionToTenant.remove(sessionId);
 
         if (userId != null) {
             Set<WebSocketSession> sessions = userSessions.get(userId);
@@ -90,6 +101,10 @@ public class ConnectionRegistry {
 
     public Long getUserId(WebSocketSession session) {
         return sessionToUser.get(session.getId());
+    }
+
+    public Long getTenantId(WebSocketSession session) {
+        return sessionToTenant.get(session.getId());
     }
 
     public int getTotalConnections() {

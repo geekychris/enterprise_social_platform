@@ -7,6 +7,7 @@ final class APIClient {
     var baseURL = "http://localhost:8080/api"
     var token: String?
     var debugUserId: Int64?
+    var tenantId: String?
 
     private let session: URLSession
     private let decoder: JSONDecoder
@@ -32,6 +33,10 @@ final class APIClient {
             req.setValue(String(debugId), forHTTPHeaderField: "X-Debug-User-Id")
         } else if let token {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        if let tenantId {
+            req.setValue(tenantId, forHTTPHeaderField: "X-Tenant-Id")
         }
 
         if let body {
@@ -95,6 +100,9 @@ final class APIClient {
         } else if let token {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        if let tenantId {
+            req.setValue(tenantId, forHTTPHeaderField: "X-Tenant-Id")
+        }
 
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -120,6 +128,9 @@ final class APIClient {
             req.setValue(String(debugId), forHTTPHeaderField: "X-Debug-User-Id")
         } else if let token {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let tenantId {
+            req.setValue(tenantId, forHTTPHeaderField: "X-Tenant-Id")
         }
         req.timeoutInterval = 120
 

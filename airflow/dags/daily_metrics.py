@@ -2,7 +2,7 @@
 Daily Metrics DAG
 
 Runs daily at 04:00 UTC (after entity rollup).
-Computes DAU, WAU, MAU and other aggregate metrics.
+Computes DAU, WAU, MAU and other aggregate metrics, broken down by tenant.
 """
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -40,7 +40,7 @@ def check_daily_signals(ds, **kwargs):
 with DAG(
     'daily_metrics',
     default_args=default_args,
-    description='Compute DAU, WAU, MAU and engagement metrics',
+    description='Compute DAU, WAU, MAU and engagement metrics per tenant',
     schedule_interval='0 4 * * *',
     start_date=datetime(2026, 3, 29),
     catchup=False,
@@ -61,10 +61,11 @@ with DAG(
         sql="""
             CREATE TABLE IF NOT EXISTS iceberg.worksphere.daily_metrics (
                 metric_date DATE,
+                tenant_id BIGINT,
                 metric_name VARCHAR,
                 metric_value BIGINT,
                 computed_at TIMESTAMP
-            ) WITH (partitioning = ARRAY['metric_date'])
+            ) WITH (partitioning = ARRAY['tenant_id', 'metric_date'])
         """,
     )
 
@@ -75,11 +76,13 @@ with DAG(
             INSERT INTO iceberg.worksphere.daily_metrics
             SELECT
                 DATE '{{ ds }}' AS metric_date,
+                tenant_id,
                 'DAU' AS metric_name,
                 COUNT(DISTINCT user_id) AS metric_value,
                 CURRENT_TIMESTAMP AS computed_at
             FROM iceberg.worksphere.userinteraction
             WHERE event_date = '{{ ds }}'
+            GROUP BY tenant_id
         """,
     )
 
@@ -90,12 +93,14 @@ with DAG(
             INSERT INTO iceberg.worksphere.daily_metrics
             SELECT
                 DATE '{{ ds }}',
+                tenant_id,
                 'DAILY_POSTS',
                 COUNT(*),
                 CURRENT_TIMESTAMP
             FROM iceberg.worksphere.entitypost
             WHERE event_date = DATE '{{ ds }}'
               AND event_type = 'CREATE'
+            GROUP BY tenant_id
         """,
     )
 
@@ -106,12 +111,14 @@ with DAG(
             INSERT INTO iceberg.worksphere.daily_metrics
             SELECT
                 DATE '{{ ds }}',
+                tenant_id,
                 'DAILY_MESSAGES',
                 COUNT(*),
                 CURRENT_TIMESTAMP
             FROM iceberg.worksphere.entitymessage
             WHERE event_date = DATE '{{ ds }}'
               AND event_type = 'CREATE'
+            GROUP BY tenant_id
         """,
     )
 
@@ -122,12 +129,14 @@ with DAG(
             INSERT INTO iceberg.worksphere.daily_metrics
             SELECT
                 DATE '{{ ds }}',
+                tenant_id,
                 'DAILY_REACTIONS',
                 COUNT(*),
                 CURRENT_TIMESTAMP
             FROM iceberg.worksphere.entityreaction
             WHERE event_date = DATE '{{ ds }}'
               AND event_type = 'CREATE'
+            GROUP BY tenant_id
         """,
     )
 
@@ -138,11 +147,13 @@ with DAG(
             INSERT INTO iceberg.worksphere.daily_metrics
             SELECT
                 DATE '{{ ds }}',
+                tenant_id,
                 'WAU',
                 COUNT(DISTINCT user_id),
                 CURRENT_TIMESTAMP
             FROM iceberg.worksphere.userinteraction
             WHERE event_date BETWEEN DATE '{{ ds }}' - INTERVAL '7' DAY AND DATE '{{ ds }}'
+            GROUP BY tenant_id
         """,
     )
 
@@ -153,11 +164,13 @@ with DAG(
             INSERT INTO iceberg.worksphere.daily_metrics
             SELECT
                 DATE '{{ ds }}',
+                tenant_id,
                 'MAU',
                 COUNT(DISTINCT user_id),
                 CURRENT_TIMESTAMP
             FROM iceberg.worksphere.userinteraction
             WHERE event_date BETWEEN DATE '{{ ds }}' - INTERVAL '30' DAY AND DATE '{{ ds }}'
+            GROUP BY tenant_id
         """,
     )
 

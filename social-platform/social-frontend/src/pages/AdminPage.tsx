@@ -7,10 +7,11 @@ import api from '../api/client';
 import OrgAdminTab from '../components/admin/OrgAdminTab';
 import MLPlaygroundTab from '../components/admin/MLPlaygroundTab';
 
-type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org' | 'ml' | 'devops';
+type Tab = 'dashboard' | 'engagement' | 'users' | 'content' | 'groups-pages' | 'graph' | 'org' | 'ml' | 'devops' | 'tenants';
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
+  { key: 'tenants', label: 'Tenants' },
   { key: 'engagement', label: 'Engagement' },
   { key: 'users', label: 'User Management' },
   { key: 'content', label: 'Content' },
@@ -74,6 +75,7 @@ export default function AdminPage() {
       </div>
 
       {activeTab === 'dashboard' && <DashboardTab />}
+      {activeTab === 'tenants' && <TenantsTab />}
       {activeTab === 'engagement' && <EngagementTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'content' && <ContentTab />}
@@ -2535,6 +2537,307 @@ interface ServiceInfo {
   status?: 'healthy' | 'unhealthy' | 'unknown';
   notes?: string;
 }
+
+/* ────────────────────────── Tenants Tab ────────────────────────── */
+
+interface Tenant {
+  id: number;
+  name: string;
+  slug: string;
+  plan: string;
+  maxUsers: number;
+  maxStorageGb: number;
+  settings: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function TenantsTab() {
+  const queryClient = useQueryClient();
+  const [showCreate, setShowCreate] = React.useState(false);
+  const [editingTenant, setEditingTenant] = React.useState<Tenant | null>(null);
+
+  // Form state
+  const [formName, setFormName] = React.useState('');
+  const [formSlug, setFormSlug] = React.useState('');
+  const [formPlan, setFormPlan] = React.useState('free');
+  const [formMaxUsers, setFormMaxUsers] = React.useState(1000);
+  const [formAdminUser, setFormAdminUser] = React.useState('');
+  const [formAdminPass, setFormAdminPass] = React.useState('');
+  const [formAdminEmail, setFormAdminEmail] = React.useState('');
+  const [formAdminName, setFormAdminName] = React.useState('');
+  const [createResult, setCreateResult] = React.useState<string | null>(null);
+
+  const { data: tenants, isLoading } = useQuery<Tenant[]>({
+    queryKey: ['tenants'],
+    queryFn: () => api.get('/super-admin/tenants').then((r) => r.data),
+    staleTime: 10000,
+  });
+
+  const createTenant = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      api.post('/super-admin/tenants', body),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      setCreateResult(JSON.stringify(res.data, null, 2));
+      setShowCreate(false);
+      resetForm();
+    },
+  });
+
+  const updateTenant = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
+      api.put(`/super-admin/tenants/${id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      setEditingTenant(null);
+    },
+  });
+
+  const disableTenant = useMutation({
+    mutationFn: (id: number) => api.delete(`/super-admin/tenants/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tenants'] }),
+  });
+
+  const resetForm = () => {
+    setFormName(''); setFormSlug(''); setFormPlan('free'); setFormMaxUsers(1000);
+    setFormAdminUser(''); setFormAdminPass(''); setFormAdminEmail(''); setFormAdminName('');
+  };
+
+  const handleCreate = () => {
+    createTenant.mutate({
+      name: formName,
+      slug: formSlug,
+      plan: formPlan,
+      maxUsers: formMaxUsers,
+      adminUsername: formAdminUser || undefined,
+      adminPassword: formAdminPass || undefined,
+      adminEmail: formAdminEmail || undefined,
+      adminDisplayName: formAdminName || formName + ' Admin',
+    });
+  };
+
+  if (isLoading) return <div className="text-gray-400">Loading tenants...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-900">Tenant Management</h2>
+        <button
+          onClick={() => { setShowCreate(true); resetForm(); setCreateResult(null); }}
+          className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600"
+        >
+          + New Tenant
+        </button>
+      </div>
+
+      {/* Create result */}
+      {createResult && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex justify-between items-start">
+            <h4 className="font-semibold text-green-800 text-sm">Tenant Created</h4>
+            <button onClick={() => setCreateResult(null)} className="text-green-500 text-xs">Dismiss</button>
+          </div>
+          <pre className="text-xs text-green-700 mt-2 overflow-auto">{createResult}</pre>
+        </div>
+      )}
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <h3 className="font-semibold text-gray-900">Create New Tenant</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
+              <input value={formName} onChange={(e) => setFormName(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm" placeholder="Acme Corp" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Slug * (subdomain)</label>
+              <input value={formSlug} onChange={(e) => setFormSlug(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm" placeholder="acme" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Plan</label>
+              <select value={formPlan} onChange={(e) => setFormPlan(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm">
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Max Users</label>
+              <input type="number" value={formMaxUsers} onChange={(e) => setFormMaxUsers(Number(e.target.value))}
+                className="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Initial Admin User (optional)</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Username</label>
+                <input value={formAdminUser} onChange={(e) => setFormAdminUser(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm" placeholder="admin" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
+                <input type="password" value={formAdminPass} onChange={(e) => setFormAdminPass(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                <input value={formAdminEmail} onChange={(e) => setFormAdminEmail(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm" placeholder="admin@acme.com" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Display Name</label>
+                <input value={formAdminName} onChange={(e) => setFormAdminName(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm" placeholder="Acme Admin" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={handleCreate} disabled={!formName || !formSlug || createTenant.isPending}
+              className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50">
+              {createTenant.isPending ? 'Creating...' : 'Create Tenant'}
+            </button>
+            <button onClick={() => setShowCreate(false)}
+              className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+          </div>
+          {createTenant.isError && (
+            <p className="text-sm text-red-500">Error: {(createTenant.error as Error)?.message}</p>
+          )}
+        </div>
+      )}
+
+      {/* Tenant list */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Tenant</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Slug</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Plan</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Limits</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Created</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {tenants?.map((t) => (
+              <tr key={t.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-gray-900">{t.name}</div>
+                  <div className="text-xs text-gray-400 font-mono">ID: {t.id}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{t.slug}</code>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    t.plan === 'enterprise' ? 'bg-purple-100 text-purple-700' :
+                    t.plan === 'pro' ? 'bg-blue-100 text-blue-700' :
+                    t.plan === 'disabled' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {t.plan}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  {t.maxUsers} users / {t.maxStorageGb}GB
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingTenant(t)}
+                      className="text-xs text-primary-600 hover:underline">Edit</button>
+                    {t.id !== 1 && t.plan !== 'disabled' && (
+                      <button onClick={() => { if (confirm(`Disable tenant "${t.name}"?`)) disableTenant.mutate(t.id); }}
+                        className="text-xs text-red-500 hover:underline">Disable</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Edit modal */}
+      {editingTenant && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setEditingTenant(null)}>
+          <div className="bg-white rounded-lg p-6 w-96 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900">Edit: {editingTenant.name}</h3>
+            <EditTenantForm
+              tenant={editingTenant}
+              onSave={(body) => updateTenant.mutate({ id: editingTenant.id, body })}
+              onCancel={() => setEditingTenant(null)}
+              isPending={updateTenant.isPending}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* API reference */}
+      <div className="bg-gray-50 rounded-lg p-4 text-xs text-gray-500">
+        <h4 className="font-medium text-gray-700 mb-2">REST API</h4>
+        <div className="space-y-1 font-mono">
+          <div>GET  /api/super-admin/tenants — List all tenants</div>
+          <div>POST /api/super-admin/tenants — Create tenant (+ optional admin user)</div>
+          <div>PUT  /api/super-admin/tenants/:id — Update tenant</div>
+          <div>DEL  /api/super-admin/tenants/:id — Disable tenant</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditTenantForm({ tenant, onSave, onCancel, isPending }: {
+  tenant: Tenant; onSave: (body: Record<string, unknown>) => void;
+  onCancel: () => void; isPending: boolean;
+}) {
+  const [plan, setPlan] = React.useState(tenant.plan);
+  const [maxUsers, setMaxUsers] = React.useState(tenant.maxUsers);
+  const [maxStorage, setMaxStorage] = React.useState(tenant.maxStorageGb);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Plan</label>
+        <select value={plan} onChange={(e) => setPlan(e.target.value)}
+          className="w-full border rounded px-3 py-2 text-sm">
+          <option value="free">Free</option>
+          <option value="pro">Pro</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Max Users</label>
+        <input type="number" value={maxUsers} onChange={(e) => setMaxUsers(Number(e.target.value))}
+          className="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Max Storage (GB)</label>
+        <input type="number" value={maxStorage} onChange={(e) => setMaxStorage(Number(e.target.value))}
+          className="w-full border rounded px-3 py-2 text-sm" />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button onClick={() => onSave({ plan, maxUsers, maxStorageGb: maxStorage })} disabled={isPending}
+          className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50">
+          {isPending ? 'Saving...' : 'Save'}
+        </button>
+        <button onClick={onCancel} className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────── DevOps Tab ────────────────────────── */
 
 function DevOpsTab() {
   const [serviceHealth, setServiceHealth] = React.useState<Record<string, string>>({});

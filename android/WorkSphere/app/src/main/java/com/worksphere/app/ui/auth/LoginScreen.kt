@@ -1,7 +1,9 @@
 package com.worksphere.app.ui.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +28,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -36,6 +42,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -47,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,6 +68,12 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+// ---------------------------------------------------------------------------
+// Tenant model
+// ---------------------------------------------------------------------------
+
+data class TenantOption(val id: Long, val name: String, val slug: String, val plan: String)
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -87,6 +101,22 @@ fun LoginScreen() {
     // Server URL
     var serverUrl by remember { mutableStateOf(AuthService.getServerUrl()) }
     var serverReachable by remember { mutableStateOf<Boolean?>(null) }
+
+    // Tenant selection
+    var tenants by remember { mutableStateOf<List<TenantOption>>(emptyList()) }
+    var selectedTenantId by remember { mutableStateOf("1") }
+
+    LaunchedEffect(Unit) {
+        try {
+            val raw = ApiClient.getRaw("/tenants/list")
+            val list = ApiClient.gson.fromJson(raw, Array<TenantOption>::class.java)
+            tenants = list.toList()
+            if (list.isNotEmpty()) {
+                selectedTenantId = list[0].id.toString()
+                AuthService.setTenant(list[0].id.toString())
+            }
+        } catch (_: Exception) {}
+    }
 
     fun log(msg: String) {
         val ts = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
@@ -183,6 +213,74 @@ fun LoginScreen() {
             }
 
             Spacer(Modifier.height(16.dp))
+
+            // ── Tenant selector ──────────────────────────────────────
+            if (tenants.size > 1) {
+                Text(
+                    "Organization",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                tenants.forEach { tenant ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedTenantId = tenant.id.toString()
+                                AuthService.setTenant(tenant.id.toString())
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (selectedTenantId == tenant.id.toString())
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surface
+                        ),
+                        border = if (selectedTenantId == tenant.id.toString())
+                            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(
+                                        if (selectedTenantId == tenant.id.toString()) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outline,
+                                        CircleShape
+                                    )
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    tenant.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    "${tenant.slug}.worksphere.com",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                tenant.plan,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                Spacer(Modifier.height(8.dp))
+            }
 
             // ── Tab row ──────────────────────────────────────────────
             TabRow(selectedTabIndex = selectedTab) {

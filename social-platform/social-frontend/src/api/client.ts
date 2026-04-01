@@ -15,6 +15,12 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  // Send tenant ID on every request
+  const tenantId = localStorage.getItem('tenantId');
+  if (tenantId) {
+    config.headers['X-Tenant-Id'] = tenantId;
+  }
+
   // Let axios set Content-Type automatically for FormData (multipart uploads)
   if (config.data instanceof FormData) {
     delete config.headers['Content-Type'];

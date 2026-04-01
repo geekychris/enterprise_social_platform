@@ -11,13 +11,14 @@
   },
   "warehouse": {
     "table_name": "analytics.user_interactions",
-    "partition_by": ["event_date", "interaction_type"],
+    "partition_by": ["tenant_id", "event_date", "interaction_type"],
     "sort_by": ["timestamp", "user_id"],
     "retention_days": 180
   },
   "fields": [
     {"name": "timestamp", "type": "timestamp", "required": true, "description": "Event timestamp"},
     {"name": "event_date", "type": "date", "required": true, "description": "Partition date"},
+    {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
     {"name": "user_id", "type": "long", "required": true, "description": "User performing action"},
     {"name": "interaction_type", "type": "string", "required": true, "description": "FEED_CLICK, REACTION, COMMENT, MESSAGE_SENT, SEARCH, PROFILE_VIEW, BOT_INTERACTION, POLL_VOTE"},
     {"name": "target_id", "type": "long", "required": false, "description": "Target entity ID (post, user, conversation)"},

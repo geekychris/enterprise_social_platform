@@ -4,21 +4,29 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * A 64-bit globally unique identifier with an embedded type.
- * Layout: [8-bit type code][56-bit sequence value]
+ * A 64-bit globally unique identifier with embedded type and tenant.
+ * Layout: [8-bit type code][16-bit tenant id][40-bit sequence value]
  *
- * This encoding matches AOEE's EntityId format (8-bit type + 56-bit value),
- * allowing zero-conversion interop with the social graph cache.
+ * This encoding extends AOEE's EntityId format with tenant awareness.
+ * The upper 8 bits identify the object type, the next 16 bits identify
+ * the tenant, and the lower 40 bits hold the sequence value.
  *
- * Max sequence value per type: 2^56 - 1 = 72,057,594,037,927,935
+ * Max tenants: 2^16 - 1 = 65,535
+ * Max sequence value per type per tenant: 2^40 - 1 = 1,099,511,627,775
  */
 public record GlobalId(long value) implements Comparable<GlobalId> {
 
-    public static final long SEQUENCE_MASK = 0x00FFFFFFFFFFFFFFL;
+    public static final long SEQUENCE_MASK = 0x000000FFFFFFFFFFL; // 40 bits
+    public static final long TENANT_MASK = 0xFFFFL;               // 16 bits
     public static final int TYPE_SHIFT = 56;
+    public static final int TENANT_SHIFT = 40;
 
     public ObjectType type() {
         return ObjectType.fromCode((byte) (value >>> TYPE_SHIFT));
+    }
+
+    public int tenantId() {
+        return (int) ((value >>> TENANT_SHIFT) & TENANT_MASK);
     }
 
     public long sequence() {
@@ -26,11 +34,21 @@ public record GlobalId(long value) implements Comparable<GlobalId> {
     }
 
     public static GlobalId of(ObjectType type, long sequence) {
+        return of(type, 1L, sequence);
+    }
+
+    public static GlobalId of(ObjectType type, long tenantId, long sequence) {
         if (sequence < 0 || sequence > SEQUENCE_MASK) {
             throw new IllegalArgumentException(
                     "Sequence out of range [0, " + SEQUENCE_MASK + "]: " + sequence);
         }
-        long encoded = ((long) type.code() & 0xFFL) << TYPE_SHIFT | sequence;
+        if (tenantId < 0 || tenantId > TENANT_MASK) {
+            throw new IllegalArgumentException(
+                    "Tenant ID out of range [0, " + TENANT_MASK + "]: " + tenantId);
+        }
+        long encoded = ((long) type.code() & 0xFFL) << TYPE_SHIFT
+                | (tenantId & TENANT_MASK) << TENANT_SHIFT
+                | (sequence & SEQUENCE_MASK);
         return new GlobalId(encoded);
     }
 
@@ -48,6 +66,10 @@ public record GlobalId(long value) implements Comparable<GlobalId> {
         return ObjectType.fromCode((byte) (rawId >>> TYPE_SHIFT));
     }
 
+    public static int tenantOf(long rawId) {
+        return (int) ((rawId >>> TENANT_SHIFT) & TENANT_MASK);
+    }
+
     @Override
     public int compareTo(GlobalId other) {
         return Long.compareUnsigned(this.value, other.value);
@@ -55,6 +77,6 @@ public record GlobalId(long value) implements Comparable<GlobalId> {
 
     @Override
     public String toString() {
-        return type().name() + ":" + sequence();
+        return type().name() + ":t" + tenantId() + ":" + sequence();
     }
 }

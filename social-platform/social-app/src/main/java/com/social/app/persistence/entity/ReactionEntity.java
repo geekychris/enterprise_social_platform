@@ -1,10 +1,12 @@
 package com.social.app.persistence.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.time.Instant;
 
 @Entity
 @Table(name = "reactions")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class ReactionEntity {
 
     @Id
@@ -47,4 +49,10 @@ public class ReactionEntity {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 }

@@ -23,6 +23,7 @@ object AuthService {
     private const val KEY_DEBUG_MODE = "debug_mode"
     private const val KEY_DEBUG_USER_ID = "debug_user_id"
     private const val KEY_SERVER_URL = "server_url"
+    private const val KEY_TENANT_ID = "tenant_id"
 
     private lateinit var prefs: SharedPreferences
 
@@ -39,6 +40,8 @@ object AuthService {
         private set
     var debugMode: Boolean = false
         private set
+    var tenantId: String? = null
+        private set
 
     // ---------------------------------------------------------------------
     // Initialisation
@@ -53,6 +56,13 @@ object AuthService {
         val savedUrl = prefs.getString(KEY_SERVER_URL, null)
         if (savedUrl != null) {
             ApiClient.baseUrl = savedUrl
+        }
+
+        // Restore tenant
+        val savedTenantId = prefs.getString(KEY_TENANT_ID, null)
+        if (savedTenantId != null) {
+            tenantId = savedTenantId
+            ApiClient.tenantId = savedTenantId
         }
 
         val savedToken = prefs.getString(KEY_TOKEN, null)
@@ -141,6 +151,7 @@ object AuthService {
             .putBoolean(KEY_IS_ADMIN, isAdmin)
             .putBoolean(KEY_DEBUG_MODE, true)
             .putLong(KEY_DEBUG_USER_ID, debugUserId)
+            .putString(KEY_TENANT_ID, tenantId)
             .apply()
 
         _isAuthenticated.value = true
@@ -152,12 +163,23 @@ object AuthService {
         username = ""
         isAdmin = false
         debugMode = false
+        tenantId = null
 
         ApiClient.token = null
         ApiClient.debugUserId = null
+        ApiClient.tenantId = null
 
         prefs.edit().clear().apply()
         _isAuthenticated.value = false
+    }
+
+    // ---------------------------------------------------------------------
+    // Tenant selection
+    // ---------------------------------------------------------------------
+
+    fun setTenant(id: String?) {
+        tenantId = id
+        ApiClient.tenantId = id
     }
 
     // ---------------------------------------------------------------------
@@ -192,6 +214,7 @@ object AuthService {
             .putString(KEY_USERNAME, response.username)
             .putBoolean(KEY_IS_ADMIN, response.admin)
             .putBoolean(KEY_DEBUG_MODE, false)
+            .putString(KEY_TENANT_ID, tenantId)
             .apply()
 
         _isAuthenticated.value = true

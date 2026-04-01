@@ -1,11 +1,13 @@
 package com.social.app.persistence.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
 @Table(name = "org_assignments")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class OrgAssignmentEntity {
 
     @Id
@@ -67,4 +69,10 @@ public class OrgAssignmentEntity {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 }

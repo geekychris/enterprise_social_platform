@@ -1,0 +1,41 @@
+{
+  "tenants": {
+    "default": {
+      "id": 1,
+      "name": "WorkSphere",
+      "slug": "default",
+      "plan": "free"
+    },
+    "nexus": {
+      "id": 1774990020324,
+      "name": "Nexus Technologies",
+      "slug": "nexus",
+      "plan": "enterprise"
+    },
+    "meridian": {
+      "id": 1774990021731,
+      "name": "Meridian Health",
+      "slug": "meridian",
+      "plan": "pro"
+    }
+  },
+  "users": {
+    "sarah.chen": "72058693549627798",
+    "james.wilson": "72058693549627801",
+    "priya.sharma": "72058693549627800",
+    "dr.emily.ross": "72058693549627804",
+    "nurse.alex": "72058693549627805",
+    "dr.patel": "72058693549627806",
+    "admin.torres": "72058693549627807",
+    "kai.tanaka": "72058693549627803",
+    "aisha.johnson": "72058693549627802",
+    "tech.kim": "72058693549627808",
+    "marcus.rivera": "72058693549627799"
+  },
+  "groups": {
+    "meridian_lounge": "360289069701267507",
+    "nexus_engineering": "360289069701267504",
+    "meridian_clinical": "360289069701267506",
+    "nexus_design": "360289069701267505"
+  }
+}

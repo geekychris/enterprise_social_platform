@@ -1,10 +1,12 @@
 package com.social.app.persistence.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.time.Instant;
 
 @Entity
 @Table(name = "users")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class UserEntity {
 
     @Id
@@ -78,6 +80,9 @@ public class UserEntity {
 
     @Column(name = "pronouns", length = 50)
     private String pronouns;
+
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
 
     @PrePersist
     protected void onCreate() {
@@ -171,4 +176,7 @@ public class UserEntity {
 
     public String getPronouns() { return pronouns; }
     public void setPronouns(String pronouns) { this.pronouns = pronouns; }
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 }

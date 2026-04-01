@@ -1,6 +1,7 @@
 package com.social.app.persistence.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
@@ -8,6 +9,7 @@ import java.util.Objects;
 @Entity
 @Table(name = "poll_votes")
 @IdClass(PollVoteEntity.VoteId.class)
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class PollVoteEntity {
 
     @Id
@@ -41,6 +43,12 @@ public class PollVoteEntity {
 
     public Instant getVotedAt() { return votedAt; }
     public void setVotedAt(Instant votedAt) { this.votedAt = votedAt; }
+
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
+
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
 
     public static class VoteId implements Serializable {
 

@@ -9,6 +9,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import com.social.app.tenant.TenantContext;
+
 import java.util.Map;
 
 @Service
@@ -47,7 +49,7 @@ public class MessageBroadcastService {
         }
 
         // 2. Publish to Redis for other server instances
-        String channel = "conversation:" + conversationId;
+        String channel = TenantContext.getTenantId() + ":conversation:" + conversationId;
         try { redisTemplate.convertAndSend(channel, objectMapper.writeValueAsString(message)); }
         catch (Exception e) { log.warn("Redis broadcast failed: {}", e.getMessage()); }
     }

@@ -28,9 +28,21 @@ public class GlobalIdGenerator {
         counters.get(type).set(startAfter);
     }
 
+    /**
+     * Generate a new GlobalId for the default tenant (tenant 1).
+     * Prefer {@link #next(ObjectType, long)} for multi-tenant usage.
+     */
     public GlobalId next(ObjectType type) {
+        return next(type, 1L);
+    }
+
+    /**
+     * Generate a new GlobalId with the given tenant embedded in the ID.
+     * Layout: [8-bit type][16-bit tenant][40-bit sequence]
+     */
+    public GlobalId next(ObjectType type, long tenantId) {
         long seq = counters.get(type).incrementAndGet();
-        return GlobalId.of(type, seq);
+        return GlobalId.of(type, tenantId, seq);
     }
 
     public long currentSequence(ObjectType type) {

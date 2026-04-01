@@ -8,6 +8,8 @@ struct LoginView: View {
     @State private var displayName = ""
     @State private var email = ""
     @State private var bio = ""
+    @State private var tenants: [TenantOption] = []
+    @State private var selectedTenantId = "1"
     @State private var debugUserId = ""
     @State private var serverURL = "http://localhost:8080"
     @State private var error: String?
@@ -60,6 +62,50 @@ struct LoginView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
+
+                // Tenant selector
+                if tenants.count > 1 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Organization")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+
+                        ForEach(tenants) { tenant in
+                            Button {
+                                selectedTenantId = String(tenant.id)
+                                APIClient.shared.tenantId = String(tenant.id)
+                            } label: {
+                                HStack {
+                                    Circle()
+                                        .fill(selectedTenantId == String(tenant.id) ? .blue : .gray.opacity(0.3))
+                                        .frame(width: 10, height: 10)
+                                    Text(tenant.name)
+                                        .font(.subheadline.weight(.medium))
+                                    Spacer()
+                                    Text(tenant.plan)
+                                        .font(.caption2)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(tenant.plan == "enterprise" ? Color.purple.opacity(0.1) : tenant.plan == "pro" ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                                        .foregroundStyle(tenant.plan == "enterprise" ? .purple : tenant.plan == "pro" ? .blue : .gray)
+                                        .clipShape(Capsule())
+                                }
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 12)
+                                .background(selectedTenantId == String(tenant.id) ? Color.blue.opacity(0.05) : .clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(selectedTenantId == String(tenant.id) ? .blue : .gray.opacity(0.2), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                }
 
                 // Forms
                 VStack(spacing: 12) {
@@ -184,6 +230,15 @@ struct LoginView: View {
                 Spacer()
             }
         }
+        .task {
+            do {
+                tenants = try await APIClient.shared.get("/tenants/list")
+                if let first = tenants.first {
+                    selectedTenantId = String(first.id)
+                    APIClient.shared.tenantId = String(first.id)
+                }
+            } catch {}
+        }
         .onAppear {
             serverURL = String(APIClient.shared.baseURL.dropLast(4))
             ping()
@@ -255,4 +310,11 @@ struct LoginView: View {
             loading = false
         }
     }
+}
+
+struct TenantOption: Codable, Identifiable {
+    let id: Int64
+    let name: String
+    let slug: String
+    let plan: String
 }

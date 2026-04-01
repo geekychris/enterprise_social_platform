@@ -10,6 +10,7 @@ import com.social.app.persistence.repository.PageMembershipRepository;
 import com.social.app.service.AnalyticsService.FeedFeatures;
 import com.social.core.dto.FeedResponse;
 import com.social.core.dto.PostDto;
+import com.social.app.tenant.TenantContext;
 import com.social.core.model.Visibility;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.slf4j.Logger;
@@ -70,7 +71,7 @@ public class FeedService {
 
     public FeedResponse assembleFeed(long userId, Long cursor, int limit) {
         // Try pre-computed feed from Redis first
-        Set<String> cachedPostIds = redis.opsForZSet().reverseRange("feed:" + userId, 0, limit + 10);
+        Set<String> cachedPostIds = redis.opsForZSet().reverseRange("feed:" + TenantContext.getTenantId() + ":" + userId, 0, limit + 10);
         if (cachedPostIds != null && !cachedPostIds.isEmpty()) {
             List<Long> postIds = cachedPostIds.stream()
                     .map(Long::parseLong)

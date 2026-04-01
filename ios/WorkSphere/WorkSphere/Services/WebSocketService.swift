@@ -42,6 +42,9 @@ final class WebSocketService {
         } else {
             return // No auth
         }
+        if let tenantId = api.tenantId {
+            urlString += "&tenant=\(tenantId)"
+        }
 
         guard let url = URL(string: urlString) else { return }
 

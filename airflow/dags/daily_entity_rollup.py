@@ -21,43 +21,43 @@ from airflow.sensors.python import PythonSensor
 ENTITIES = {
     'entityuser': {
         'pk': 'id',
-        'cols': ['id', 'username', 'display_name', 'email', 'avatar_url', 'bio',
+        'cols': ['tenant_id', 'id', 'username', 'display_name', 'email', 'avatar_url', 'bio',
                  'visibility', 'is_admin', 'job_title', 'department', 'manager_id',
                  'location', 'is_bot', 'created_at'],
     },
     'entitypost': {
         'pk': 'id',
-        'cols': ['id', 'author_id', 'content', 'visibility', 'target_type', 'target_id', 'created_at'],
+        'cols': ['tenant_id', 'id', 'author_id', 'content', 'visibility', 'target_type', 'target_id', 'created_at'],
     },
     'entitycomment': {
         'pk': 'id',
-        'cols': ['id', 'post_id', 'author_id', 'content', 'parent_id', 'depth', 'created_at'],
+        'cols': ['tenant_id', 'id', 'post_id', 'author_id', 'content', 'parent_id', 'depth', 'created_at'],
     },
     'entityreaction': {
         'pk': 'id',
-        'cols': ['id', 'user_id', 'target_id', 'target_type', 'reaction_type', 'created_at'],
+        'cols': ['tenant_id', 'id', 'user_id', 'target_id', 'target_type', 'reaction_type', 'created_at'],
     },
     'entitymessage': {
         'pk': 'id',
-        'cols': ['id', 'conversation_id', 'sender_id', 'content_length', 'has_attachment', 'created_at'],
+        'cols': ['tenant_id', 'id', 'conversation_id', 'sender_id', 'content_length', 'has_attachment', 'created_at'],
     },
     'entitygroup': {
         'pk': 'id',
-        'cols': ['id', 'name', 'description', 'visibility', 'owner_id', 'created_at'],
+        'cols': ['tenant_id', 'id', 'name', 'description', 'visibility', 'owner_id', 'created_at'],
     },
     'entitypage': {
         'pk': 'id',
-        'cols': ['id', 'name', 'description', 'visibility', 'owner_id', 'created_at'],
+        'cols': ['tenant_id', 'id', 'name', 'description', 'visibility', 'owner_id', 'created_at'],
     },
     'entityfollow': {
         'pk': 'follower_id',  # composite: use follower_id + followed_id
         'pk2': 'followed_id',
-        'cols': ['follower_id', 'followed_id', 'created_at'],
+        'cols': ['tenant_id', 'follower_id', 'followed_id', 'created_at'],
     },
     'entitymembership': {
         'pk': 'user_id',  # composite: use user_id + group_id
         'pk2': 'group_id',
-        'cols': ['user_id', 'group_id', 'role', 'status', 'created_at'],
+        'cols': ['tenant_id', 'user_id', 'group_id', 'role', 'status', 'created_at'],
     },
 }
 

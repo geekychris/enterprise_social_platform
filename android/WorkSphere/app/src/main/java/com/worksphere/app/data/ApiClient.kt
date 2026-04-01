@@ -35,6 +35,9 @@ object ApiClient {
     /** Debug user id – set when using debug/impersonation login. */
     var debugUserId: Long? = null
 
+    /** Tenant id – set from the tenant selector on the login screen. */
+    var tenantId: String? = null
+
     val gson: Gson = GsonBuilder()
         .registerTypeAdapterFactory(SafeLongAdapterFactory())
         .create()
@@ -53,6 +56,7 @@ object ApiClient {
         debugUserId?.let { uid ->
             builder.addHeader("X-Debug-User-Id", uid.toString())
         }
+        tenantId?.let { builder.addHeader("X-Tenant-Id", it) }
 
         chain.proceed(builder.build())
     }
@@ -168,6 +172,21 @@ object ApiClient {
         } catch (_: Exception) {
             -1
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Raw request (returns body as String, no deserialisation)
+    // -----------------------------------------------------------------------
+
+    suspend fun getRaw(path: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(("$baseUrl$path").toHttpUrl())
+            .get()
+            .build()
+        val response = httpClient.newCall(request).execute()
+        val bodyString = response.body?.string().orEmpty()
+        if (!response.isSuccessful) throw ApiException(response.code, bodyString)
+        bodyString
     }
 
     // -----------------------------------------------------------------------
