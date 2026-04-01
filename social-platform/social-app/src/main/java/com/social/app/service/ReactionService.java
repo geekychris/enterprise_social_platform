@@ -71,6 +71,7 @@ public class ReactionService {
 
         eventPublisher.publishEvent(new ReactionEvent(userId, targetId, reactionType, true));
         cacheService.evict("reactions:counts:" + targetId);
+        cacheService.evictPattern("post:" + targetId + ":*");
         try {
             entityEventService.publishReactionEvent("CREATE", saved.getId(), saved.getUserId(),
                 saved.getTargetId(), saved.getTargetType(), saved.getReactionType(), saved.getCreatedAt());
@@ -84,6 +85,7 @@ public class ReactionService {
             reactionRepository.delete(existing);
             eventPublisher.publishEvent(new ReactionEvent(userId, targetId, existing.getReactionType(), false));
             cacheService.evict("reactions:counts:" + targetId);
+        cacheService.evictPattern("post:" + targetId + ":*");
             try {
                 entityEventService.publishReactionEvent("DELETE", existing.getId(), existing.getUserId(),
                     existing.getTargetId(), existing.getTargetType(), existing.getReactionType(), existing.getCreatedAt());

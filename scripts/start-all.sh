@@ -141,6 +141,19 @@ else
   fi
 fi
 
+# ── 9. Apps (Support Bot) ──
+echo ""
+echo "── Step 9: Apps ──"
+if curl -s http://localhost:5050/health 2>/dev/null | grep -q ok; then
+  echo "  ✓ Support Bot already running"
+else
+  if [ -f "$PROJECT_DIR/apps/support-bot/app.py" ]; then
+    echo "  Support Bot available. Start with:"
+    echo "    cd apps/support-bot && APP_ID=xxx API_KEY=xxx python3 app.py"
+    echo "    Or: docker compose -f docker-compose.apps.yml up -d"
+  fi
+fi
+
 # ── Status ──
 echo ""
 echo "═══════════════════════════════════════════════════"
@@ -161,6 +174,7 @@ docker ps --format "{{.Names}}" | grep -q "ws-hive-metastore" && echo "  ✓ Hiv
 docker ps --format "{{.Names}}" | grep -q "ws-trino" && echo "  ✓ Trino              http://localhost:8081" || echo "  ✗ Trino"
 docker ps --format "{{.Names}}" | grep -q "ws-spark-consumer" && echo "  ✓ Spark Consumer     Kafka → Iceberg streaming" || echo "  ✗ Spark Consumer"
 docker ps --format "{{.Names}}" | grep -q "ws-airflow-webserver" && echo "  ✓ Airflow            http://localhost:8083 (admin/worksphere)" || echo "  ✗ Airflow"
+curl -s http://localhost:5050/health 2>/dev/null | grep -q ok && echo "  ✓ Support Bot        http://localhost:5050" || echo "  · Support Bot        (not running)"
 
 echo ""
 echo "Access:"

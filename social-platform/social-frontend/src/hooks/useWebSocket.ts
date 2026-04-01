@@ -39,6 +39,19 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ['messages', msg.conversationId] });
             queryClient.invalidateQueries({ queryKey: ['messages', String(msg.conversationId)] });
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          } else if (msg.type === 'POST_UPDATE') {
+            // New comment or reaction — refresh everything that shows this post
+            const postId = msg.postId;
+            queryClient.invalidateQueries({ queryKey: ['post', postId] });
+            queryClient.invalidateQueries({ queryKey: ['post', String(postId)] });
+            queryClient.invalidateQueries({ queryKey: ['comments', postId] });
+            queryClient.invalidateQueries({ queryKey: ['comments', String(postId)] });
+            // Invalidate all feed/post list queries (feed, group-posts, page-posts, etc.)
+            queryClient.invalidateQueries({ queryKey: ['feed'] });
+            queryClient.invalidateQueries({ predicate: (q) => {
+              const key = q.queryKey[0];
+              return key === 'group-posts' || key === 'page-posts' || key === 'feed' || key === 'pinned-post';
+            }});
           }
         } catch {}
       };

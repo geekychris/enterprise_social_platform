@@ -14,6 +14,7 @@ import AdminPage from './pages/AdminPage';
 import PostPage from './pages/PostPage';
 import SetupPage from './pages/SetupPage';
 import OrgPage from './pages/OrgPage';
+import SupportPage from './pages/SupportPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => !!s.token || !!s.debugUserId);
@@ -43,6 +44,7 @@ export default function App() {
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/org" element={<OrgPage />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/support" element={<SupportPage />} />
                 <Route path="/admin/*" element={<AdminPage />} />
               </Routes>
             </AppShell>

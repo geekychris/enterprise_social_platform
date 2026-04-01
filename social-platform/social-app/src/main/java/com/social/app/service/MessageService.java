@@ -38,6 +38,7 @@ public class MessageService {
     private final MessageBroadcastService messageBroadcastService;
     private final EventPublisher eventPublisher;
     private final EntityEventService entityEventService;
+    private final AppService appService;
 
     public MessageService(MessageRepository messageRepository,
                           UserRepository userRepository,
@@ -49,7 +50,8 @@ public class MessageService {
                           UnreadCountService unreadCountService,
                           MessageBroadcastService messageBroadcastService,
                           EventPublisher eventPublisher,
-                          EntityEventService entityEventService) {
+                          EntityEventService entityEventService,
+                          AppService appService) {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.attachmentRepository = attachmentRepository;
@@ -61,6 +63,7 @@ public class MessageService {
         this.messageBroadcastService = messageBroadcastService;
         this.eventPublisher = eventPublisher;
         this.entityEventService = entityEventService;
+        this.appService = appService;
     }
 
     @Transactional
@@ -105,6 +108,17 @@ public class MessageService {
                 saved.getSenderId(), content != null ? content.length() : 0, hasAttachment, saved.getCreatedAt());
         } catch (Exception e) {
             log.warn("Failed to publish entity message event: {}", e.getMessage());
+        }
+
+        try {
+            appService.publishEvent("MESSAGE_RECEIVED", "CONVERSATION", conversationId, java.util.Map.of(
+                "messageId", saved.getId(),
+                "conversationId", conversationId,
+                "senderId", senderId,
+                "content", content != null ? content : ""
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to publish app message event: {}", e.getMessage());
         }
 
         return saved;

@@ -1,0 +1,84 @@
+# Slash Commands App
+# Webhook-based app providing /joke and /stock slash commands.
+# Requires: social-app running, app registered and installed via App Platform API.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slash-commands
+  namespace: worksphere
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slash-commands
+  template:
+    metadata:
+      labels:
+        app: slash-commands
+    spec:
+      containers:
+        - name: slash-commands
+          image: worksphere/slash-commands:latest
+          ports:
+            - containerPort: 5051
+          env:
+            - name: WORKSPHERE_URL
+              value: "http://social-app:8080"
+            - name: WEBHOOK_PORT
+              value: "5051"
+            - name: APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: slash-commands-secrets
+                  key: app-id
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: slash-commands-secrets
+                  key: api-key
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5051
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slash-commands
+  namespace: worksphere
+spec:
+  selector:
+    app: slash-commands
+  ports:
+    - port: 5051
+      targetPort: 5051
+---
+# Secret template -- fill in after registering the app
+# kubectl create secret generic slash-commands-secrets \
+#   --from-literal=app-id=YOUR_APP_ID \
+#   --from-literal=api-key=YOUR_API_KEY \
+#   -n worksphere
+apiVersion: v1
+kind: Secret
+metadata:
+  name: slash-commands-secrets
+  namespace: worksphere
+type: Opaque
+stringData:
+  app-id: "REPLACE_WITH_APP_ID"
+  api-key: "REPLACE_WITH_API_KEY"

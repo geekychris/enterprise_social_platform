@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/media/**").permitAll()
                         .requestMatchers("/api/branding").permitAll()
                         .requestMatchers("/api/tenants/list").permitAll()
+                        .requestMatchers("/api/apps/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )

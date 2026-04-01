@@ -7,6 +7,7 @@ export interface EcrRepos {
   frontend: ecr.Repository;
   aoeeServer: ecr.Repository;
   aoeeProxy: ecr.Repository;
+  supportBot: ecr.Repository;
 }
 
 export class EcrStack extends cdk.Stack {
@@ -27,6 +28,7 @@ export class EcrStack extends cdk.Stack {
       frontend: createRepo('frontend'),
       aoeeServer: createRepo('aoee-server'),
       aoeeProxy: createRepo('aoee-proxy'),
+      supportBot: createRepo('support-bot'),
     };
   }
 }

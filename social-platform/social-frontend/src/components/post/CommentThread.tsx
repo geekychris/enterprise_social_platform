@@ -5,6 +5,7 @@ import api from '../../api/client';
 import type { CommentDto } from '../../api/types';
 import { useAuth } from '../../hooks/useAuth';
 import ReactionBar from '../feed/ReactionBar';
+import MarkdownContent from '../feed/MarkdownContent';
 import CommentForm from './CommentForm';
 import { formatRelativeTime } from '../../utils';
 
@@ -88,9 +89,7 @@ export default function CommentThread({ comment, maxDepth = 1 }: Props) {
               </div>
             ) : (
               <>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                  <MentionText text={comment.content} />
-                </p>
+                <MarkdownContent content={comment.content} className="text-sm" />
                 {comment.attachments && comment.attachments.length > 0 && (
                   <div className="flex gap-2 flex-wrap mt-1.5">
                     {comment.attachments.map((att) =>

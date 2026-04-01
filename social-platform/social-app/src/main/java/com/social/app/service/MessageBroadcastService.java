@@ -55,6 +55,21 @@ public class MessageBroadcastService {
     }
 
     /**
+     * Broadcast a post update (new comment, reaction change) to anyone viewing it.
+     * Published to Redis channel {tenantId}:post:{postId} — picked up by WS gateway.
+     */
+    public void broadcastPostUpdate(long postId, String updateType, Map<String, Object> data) {
+        Long tenantId = TenantContext.getTenantId();
+        String channel = (tenantId != null ? tenantId : 1) + ":post:" + postId;
+        try {
+            Map<String, Object> payload = Map.of("type", updateType, "postId", postId, "data", data);
+            redisTemplate.convertAndSend(channel, objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.debug("Post broadcast failed: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Broadcast a typing indicator to all subscribers of a conversation topic.
      */
     public void broadcastTyping(long conversationId, long userId, String userName) {

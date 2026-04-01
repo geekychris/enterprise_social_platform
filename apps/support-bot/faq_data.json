@@ -1,0 +1,79 @@
+{
+  "faqs": [
+    {
+      "question": "How do I reset my password?",
+      "answer": "Go to Settings > Security > Reset Password. You'll receive an email with a reset link. The link expires after 24 hours.",
+      "tags": ["password", "security", "account"]
+    },
+    {
+      "question": "How do I change my profile picture?",
+      "answer": "Go to your Profile page, click on your avatar, and select 'Change Photo'. You can upload a JPG or PNG up to 5MB.",
+      "tags": ["profile", "avatar", "photo"]
+    },
+    {
+      "question": "How do I create a group?",
+      "answer": "Click the '+' button in the sidebar under 'My Groups', enter a name and description, choose visibility (Public or Private), and click Create.",
+      "tags": ["group", "create", "team"]
+    },
+    {
+      "question": "How do I invite someone to my group?",
+      "answer": "Go to your group page, click 'Members' at the top, then 'Invite'. Search for the person by name or email and send the invitation.",
+      "tags": ["group", "invite", "member"]
+    },
+    {
+      "question": "How do I send a direct message?",
+      "answer": "Click on someone's name or avatar anywhere in the app, then click 'Message'. You can also go to Messages and click the compose button.",
+      "tags": ["message", "DM", "chat"]
+    },
+    {
+      "question": "How do I create a poll?",
+      "answer": "When creating a post, click the 'Poll' icon. Add your question, up to 10 options, and optionally set a closing date.",
+      "tags": ["poll", "vote", "survey"]
+    },
+    {
+      "question": "Can I edit a post after publishing?",
+      "answer": "Yes! Hover over your post and click the '...' menu, then select 'Edit'. Your post will show an 'edited' indicator.",
+      "tags": ["post", "edit", "modify"]
+    },
+    {
+      "question": "How do I search for people or content?",
+      "answer": "Use the search bar at the top of the page. You can filter by type: People, Posts, Groups, or Pages.",
+      "tags": ["search", "find", "lookup"]
+    },
+    {
+      "question": "What are pages vs groups?",
+      "answer": "Groups are collaborative spaces where members can post and discuss. Pages are broadcast channels \u2014 only admins can post, but anyone can follow and comment.",
+      "tags": ["page", "group", "difference"]
+    },
+    {
+      "question": "How do I set up notifications?",
+      "answer": "Go to Settings > Notifications. You can customize which events trigger notifications: mentions, replies, group activity, etc.",
+      "tags": ["notification", "alert", "settings"]
+    },
+    {
+      "question": "How do I use the AI assistant?",
+      "answer": "Click the sparkle icon in any conversation or page to open the AI assistant. You can ask it to summarize discussions, answer questions about content, or help draft posts.",
+      "tags": ["AI", "bot", "assistant", "roid"]
+    },
+    {
+      "question": "How do I delete my account?",
+      "answer": "Contact your organization's admin. Account deletion must be approved by an administrator for compliance reasons. Go to Settings > Account > Request Deletion.",
+      "tags": ["delete", "account", "remove"]
+    },
+    {
+      "question": "Why can't I see certain posts?",
+      "answer": "Posts may be restricted to specific groups or teams. If you can't see a post, you may need to join the relevant group or request access from the group admin.",
+      "tags": ["visibility", "access", "restricted", "permission"]
+    },
+    {
+      "question": "How do I upload files?",
+      "answer": "Click the paperclip icon when composing a post or message. You can upload images, documents, and videos up to 50MB.",
+      "tags": ["upload", "file", "attachment", "image"]
+    },
+    {
+      "question": "How do I @mention someone?",
+      "answer": "Type '@' followed by the person's name. A dropdown will appear with matching users. Select the person to mention them \u2014 they'll receive a notification.",
+      "tags": ["mention", "tag", "notify"]
+    }
+  ]
+}

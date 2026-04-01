@@ -22,12 +22,12 @@ Uses `X-Tenant-Id: 1`.
 
 | Username | Password | Display Name | Role | Notes |
 |----------|----------|--------------|------|-------|
-| `lamar.lehner` | `password123` | Lamar Lehner | **Admin** | Super-admin (can manage tenants) |
-| `joshua.padberg` | `password123` | Joshua Padberg | **Admin** | |
-| `cecilia.watsica` | `password123` | Cecilia Watsica | **Admin** | |
-| `marcellus.beatty` | `password123` | Marcellus Beatty | User | Most active user |
-| `steve.kovacek` | `password123` | Steve Kovacek | User | |
-| `lila.parisian` | `password123` | Lila Parisian | User | |
+| `lamar.lehner` | `password` | Lamar Lehner | **Admin** | Super-admin (can manage tenants) |
+| `joshua.padberg` | `password` | Joshua Padberg | **Admin** | |
+| `cecilia.watsica` | `password` | Cecilia Watsica | **Admin** | |
+| `marcellus.beatty` | `password` | Marcellus Beatty | User | Most active user |
+| `steve.kovacek` | `password` | Steve Kovacek | User | |
+| `lila.parisian` | `password` | Lila Parisian | User | |
 
 The default tenant's primary admin debug user ID is `72057594037927937`.
 

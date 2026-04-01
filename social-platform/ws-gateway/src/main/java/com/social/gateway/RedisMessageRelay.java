@@ -47,9 +47,9 @@ public class RedisMessageRelay {
         // Use reactive API for non-blocking message handling
         RedisPubSubReactiveCommands<String, String> reactive = pubSubConnection.reactive();
 
-        // First subscribe to the pattern, then observe
-        reactive.psubscribe("*:conversation:*").doOnSuccess(v ->
-            log.info("Redis psubscribe confirmed for *:conversation:*")
+        // Subscribe to conversation AND post update channels
+        reactive.psubscribe("*:conversation:*", "*:post:*").doOnSuccess(v ->
+            log.info("Redis psubscribe confirmed for *:conversation:* and *:post:*")
         ).subscribe();
 
         subscription = reactive.observePatterns()
@@ -57,18 +57,36 @@ public class RedisMessageRelay {
                     try {
                         String channel = message.getChannel();
                         String payload = message.getMessage();
-                        log.info("Redis relay received on channel: {}", channel);
 
-                        // Channel format: {tenantId}:conversation:{conversationId}
+                        // Channel format: {tenantId}:{type}:{id}
                         String[] parts = channel.split(":");
-                        // parts[0] = tenantId, parts[1] = "conversation", parts[2] = conversationId
-                        long conversationId = Long.parseLong(parts[2]);
+                        if (parts.length < 3) return;
+                        String channelType = parts[1]; // "conversation" or "post"
+                        long channelId = Long.parseLong(parts[2]);
 
-                        Set<WebSocketSession> sessions = registry.getSessionsForConversation(conversationId);
-                        log.info("Found {} sessions for conversation {}", sessions.size(), conversationId);
+                        if ("post".equals(channelType)) {
+                            // Post update — broadcast to ALL connected sessions (they'll filter client-side)
+                            String wsMessage = "{\"type\":\"POST_UPDATE\",\"postId\":" + channelId
+                                    + ",\"data\":" + payload + "}";
+                            for (WebSocketSession session : registry.getAllSessions()) {
+                                try {
+                                    if (session.isOpen()) {
+                                        session.send(reactor.core.publisher.Mono.just(
+                                                session.textMessage(wsMessage)
+                                        )).subscribe();
+                                    }
+                                } catch (Exception e) {
+                                    log.debug("Push failed: {}", e.getMessage());
+                                }
+                            }
+                            return;
+                        }
+
+                        // Conversation message — targeted to subscribers
+                        Set<WebSocketSession> sessions = registry.getSessionsForConversation(channelId);
                         if (sessions.isEmpty()) return;
 
-                        String wsMessage = "{\"type\":\"MESSAGE\",\"conversationId\":" + conversationId
+                        String wsMessage = "{\"type\":\"MESSAGE\",\"conversationId\":" + channelId
                                 + ",\"data\":" + payload + "}";
 
                         for (WebSocketSession session : sessions) {

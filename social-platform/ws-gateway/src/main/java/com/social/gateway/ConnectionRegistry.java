@@ -99,6 +99,15 @@ public class ConnectionRegistry {
         return conversationSubscribers.getOrDefault(conversationId, Set.of());
     }
 
+    /**
+     * Returns all connected sessions (for broadcast events like post updates).
+     */
+    public java.util.Collection<WebSocketSession> getAllSessions() {
+        return userSessions.values().stream()
+                .flatMap(java.util.Set::stream)
+                .toList();
+    }
+
     public Long getUserId(WebSocketSession session) {
         return sessionToUser.get(session.getId());
     }

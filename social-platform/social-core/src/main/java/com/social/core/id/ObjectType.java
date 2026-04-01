@@ -21,7 +21,11 @@ public enum ObjectType {
     POLL_OPTION((byte) 0x0E),
     BOT_MEMORY((byte) 0x0F),
     ORG_UNIT((byte) 0x10),
-    ORG_ASSIGNMENT((byte) 0x11);
+    ORG_ASSIGNMENT((byte) 0x11),
+    APP((byte) 0x12),
+    APP_INSTALLATION((byte) 0x13),
+    APP_EVENT((byte) 0x14),
+    SUPPORT_CASE((byte) 0x15);
 
     private final byte code;
 

@@ -2,10 +2,10 @@
 
 ## Authentication
 
-All test accounts share the same password: **`password123`**
+All test accounts share the same password: **`password`**
 
 You can login via:
-1. **Username/password**: Use any generated username with password `password123`
+1. **Username/password**: Use any generated username with password `password`
 2. **Register**: Create a new account from the login page
 3. **Debug mode**: Toggle "Debug Mode" on the login page and enter a raw user ID (no password needed)
 
@@ -26,9 +26,9 @@ The first 3 users are admins and can access the Admin Dashboard at `/admin`.
 
 | Username | Display Name | User ID | Email | Password |
 |----------|-------------|---------|-------|----------|
-| lamar.lehner | Lamar Lehner | `72057594037927937` | lamar.lehner@enterprise.com | password123 |
-| joshua.padberg | Joshua Padberg | `72057594037927938` | joshua.padberg@enterprise.com | password123 |
-| cecilia.watsica | Cecilia Watsica | `72057594037927939` | cecilia.watsica@enterprise.com | password123 |
+| lamar.lehner | Lamar Lehner | `72057594037927937` | lamar.lehner@enterprise.com | password |
+| joshua.padberg | Joshua Padberg | `72057594037927938` | joshua.padberg@enterprise.com | password |
+| cecilia.watsica | Cecilia Watsica | `72057594037927939` | cecilia.watsica@enterprise.com | password |
 
 ## All Test Users (First 10)
 

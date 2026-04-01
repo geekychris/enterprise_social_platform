@@ -268,6 +268,32 @@ export class EcsStack extends cdk.Stack {
       desiredCount: frontendDesiredCount,
     });
 
+    // ── Support Bot (example app) ─────────────────────────────────
+
+    const supportBotTask = new ecs.FargateTaskDefinition(this, 'SupportBotTask', {
+      memoryLimitMiB: 256,
+      cpu: 128,
+    });
+
+    supportBotTask.addContainer('support-bot', {
+      image: ecs.ContainerImage.fromEcrRepository(props.ecrRepos.supportBot),
+      portMappings: [{ containerPort: 5050 }],
+      environment: {
+        WORKSPHERE_URL: 'http://social-app.worksphere.local:8080',
+        WEBHOOK_PORT: '5050',
+        OLLAMA_URL: 'http://ollama.worksphere.local:11434',
+        SKIP_SIGNATURE_VERIFY: 'true',
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'support-bot', logGroup: pipelineLogGroup }),
+    });
+
+    new ecs.FargateService(this, 'SupportBotService', {
+      cluster,
+      taskDefinition: supportBotTask,
+      desiredCount: 1,
+      cloudMapOptions: { name: 'support-bot' },
+    });
+
     // ── WebSocket Gateway (Netty, non-blocking) ──────────────────
 
     const gwTask = new ecs.FargateTaskDefinition(this, 'WsGatewayTask', {

@@ -44,6 +44,7 @@ public class PostService {
     private final JdbcTemplate jdbc;
     private final CacheService cacheService;
     private final EntityEventService entityEventService;
+    private final AppService appService;
 
     public PostService(PostRepository postRepository,
                        ReactionRepository reactionRepository,
@@ -57,7 +58,8 @@ public class PostService {
                        UserService userService,
                        JdbcTemplate jdbc,
                        CacheService cacheService,
-                       EntityEventService entityEventService) {
+                       EntityEventService entityEventService,
+                       AppService appService) {
         this.postRepository = postRepository;
         this.pollRepository = pollRepository;
         this.pollService = pollService;
@@ -71,6 +73,7 @@ public class PostService {
         this.jdbc = jdbc;
         this.cacheService = cacheService;
         this.entityEventService = entityEventService;
+        this.appService = appService;
     }
 
     @Transactional
@@ -94,16 +97,31 @@ public class PostService {
             }
         }
 
-        eventPublisher.publishEvent(new PostCreatedEvent(
-                saved.getId(), authorId,
-                saved.getTargetType(), saved.getTargetId()
-        ));
+        try {
+            eventPublisher.publishEvent(new PostCreatedEvent(
+                    saved.getId(), authorId,
+                    saved.getTargetType(), saved.getTargetId()
+            ));
+        } catch (Exception e) { /* graph sync may fail on duplicate edges — don't block */ }
 
         try {
             entityEventService.publishPostEvent("CREATE", saved.getId(), saved.getAuthorId(),
                 saved.getContent(), saved.getVisibility(), saved.getTargetType(),
                 saved.getTargetId(), saved.getCreatedAt());
         } catch (Exception e) { /* don't affect main flow */ }
+
+        try {
+            if (saved.getTargetType() != null && saved.getTargetId() != null) {
+                appService.publishEvent("POST_CREATED", saved.getTargetType(),
+                    saved.getTargetId(), Map.of(
+                        "postId", saved.getId(),
+                        "authorId", saved.getAuthorId(),
+                        "content", saved.getContent() != null ? saved.getContent() : "",
+                        "targetType", saved.getTargetType(),
+                        "targetId", saved.getTargetId()
+                    ));
+            }
+        } catch (Exception e) { /* don't block post creation */ }
 
         return saved;
     }

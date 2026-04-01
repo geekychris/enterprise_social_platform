@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+
 @Service
 @Transactional(readOnly = true)
 public class CommentService {
@@ -27,6 +28,9 @@ public class CommentService {
     private final AttachmentService attachmentService;
     private final JdbcTemplate jdbc;
     private final EntityEventService entityEventService;
+    private final AppService appService;
+    private final CacheService cacheService;
+    private final MessageBroadcastService broadcastService;
 
     public CommentService(CommentRepository commentRepository,
                           GlobalIdGenerator idGenerator,
@@ -34,7 +38,10 @@ public class CommentService {
                           AttachmentRepository attachmentRepository,
                           AttachmentService attachmentService,
                           JdbcTemplate jdbc,
-                          EntityEventService entityEventService) {
+                          EntityEventService entityEventService,
+                          AppService appService,
+                          CacheService cacheService,
+                          MessageBroadcastService broadcastService) {
         this.commentRepository = commentRepository;
         this.idGenerator = idGenerator;
         this.userService = userService;
@@ -42,6 +49,9 @@ public class CommentService {
         this.attachmentService = attachmentService;
         this.jdbc = jdbc;
         this.entityEventService = entityEventService;
+        this.appService = appService;
+        this.cacheService = cacheService;
+        this.broadcastService = broadcastService;
     }
 
     @Transactional
@@ -77,6 +87,24 @@ public class CommentService {
                 saved.getAuthorId(), saved.getContent(), saved.getParentCommentId(),
                 saved.getDepth(), saved.getCreatedAt());
         } catch (Exception e) { /* don't affect main flow */ }
+
+        try {
+            appService.publishEvent("COMMENT_CREATED", "POST", saved.getPostId(), Map.of(
+                "commentId", saved.getId(),
+                "postId", saved.getPostId(),
+                "authorId", saved.getAuthorId(),
+                "content", saved.getContent() != null ? saved.getContent() : ""
+            ));
+        } catch (Exception e) { /* don't block comment creation */ }
+
+        // Evict parent post cache so comment count updates
+        cacheService.evictPattern("post:" + saved.getPostId() + ":*");
+
+        // Broadcast to anyone viewing this post (real-time comment update via WS gateway)
+        try {
+            broadcastService.broadcastPostUpdate(saved.getPostId(), "COMMENT_ADDED",
+                    Map.of("commentId", saved.getId(), "authorId", saved.getAuthorId()));
+        } catch (Exception e) { /* don't block */ }
 
         return saved;
     }
@@ -139,14 +167,19 @@ public class CommentService {
                 saved.getAuthorId(), saved.getContent(), saved.getParentCommentId(),
                 saved.getDepth(), saved.getCreatedAt());
         } catch (Exception e) { /* don't affect main flow */ }
+        cacheService.evictPattern("post:" + saved.getPostId() + ":*");
         return saved;
     }
 
     @Transactional
     public void delete(long commentId) {
+        CommentEntity comment = commentRepository.findById(commentId).orElse(null);
         commentRepository.deleteById(commentId);
         try {
             entityEventService.publishCommentEvent("DELETE", commentId, 0, 0, null, null, 0, null);
         } catch (Exception e) { /* don't affect main flow */ }
+        if (comment != null) {
+            cacheService.evictPattern("post:" + comment.getPostId() + ":*");
+        }
     }
 }

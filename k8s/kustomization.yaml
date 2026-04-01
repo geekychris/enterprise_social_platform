@@ -17,4 +17,6 @@ resources:
   - data-warehouse.yaml
   - airflow.yaml
   - frontend.yaml
+  - support-bot.yaml
+  - slash-commands.yaml
   - ingress.yaml

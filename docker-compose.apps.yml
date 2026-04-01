@@ -1,0 +1,50 @@
+# WorkSphere Apps
+# Third-party and internal apps that integrate via the App Platform.
+#
+# Usage:
+#   docker compose -f docker-compose.apps.yml up -d
+#
+# Prerequisites:
+#   - Social app running on localhost:8080
+#   - Support Bot registered and installed (see apps/support-bot/README.md)
+
+services:
+  support-bot:
+    build:
+      context: ./apps/support-bot
+    container_name: ws-support-bot
+    environment:
+      - WORKSPHERE_URL=http://host.docker.internal:8080
+      - WEBHOOK_PORT=5050
+      - APP_ID=${SUPPORT_BOT_APP_ID:-}
+      - API_KEY=${SUPPORT_BOT_API_KEY:-}
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - SKIP_SIGNATURE_VERIFY=true
+    ports:
+      - "5050:5050"
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  slash-commands:
+    build:
+      context: ./apps/slash-commands
+    container_name: ws-slash-commands
+    environment:
+      - WORKSPHERE_URL=http://host.docker.internal:8080
+      - WEBHOOK_PORT=5051
+      - APP_ID=${SLASH_CMD_APP_ID:-}
+      - API_KEY=${SLASH_CMD_API_KEY:-}
+    ports:
+      - "5051:5051"
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5051/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

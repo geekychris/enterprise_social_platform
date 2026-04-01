@@ -1,0 +1,88 @@
+# Support Bot App
+# Webhook-based support app that auto-answers FAQ questions and creates cases.
+# Requires: social-app running, app registered and installed via App Platform API.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: support-bot
+  namespace: worksphere
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: support-bot
+  template:
+    metadata:
+      labels:
+        app: support-bot
+    spec:
+      containers:
+        - name: support-bot
+          image: worksphere/support-bot:latest
+          ports:
+            - containerPort: 5050
+          env:
+            - name: WORKSPHERE_URL
+              value: "http://social-app:8080"
+            - name: WEBHOOK_PORT
+              value: "5050"
+            - name: OLLAMA_URL
+              value: "http://ollama:11434"
+            - name: SKIP_SIGNATURE_VERIFY
+              value: "true"
+            - name: APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: support-bot-secrets
+                  key: app-id
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: support-bot-secrets
+                  key: api-key
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5050
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5050
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: support-bot
+  namespace: worksphere
+spec:
+  selector:
+    app: support-bot
+  ports:
+    - port: 5050
+      targetPort: 5050
+---
+# Secret template — fill in after registering the app
+# kubectl create secret generic support-bot-secrets \
+#   --from-literal=app-id=YOUR_APP_ID \
+#   --from-literal=api-key=YOUR_API_KEY \
+#   -n worksphere
+apiVersion: v1
+kind: Secret
+metadata:
+  name: support-bot-secrets
+  namespace: worksphere
+type: Opaque
+stringData:
+  app-id: "REPLACE_WITH_APP_ID"
+  api-key: "REPLACE_WITH_API_KEY"
