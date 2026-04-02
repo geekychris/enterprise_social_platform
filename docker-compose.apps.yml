@@ -5,7 +5,7 @@
 #   docker compose -f docker-compose.apps.yml up -d
 #
 # Prerequisites:
-#   - Social app running on localhost:8080
+#   - Social app running on localhost:8088
 #   - Support Bot registered and installed (see apps/support-bot/README.md)
 
 services:
@@ -14,7 +14,7 @@ services:
       context: ./apps/support-bot
     container_name: ws-support-bot
     environment:
-      - WORKSPHERE_URL=http://host.docker.internal:8080
+      - WORKSPHERE_URL=http://host.docker.internal:8088
       - WEBHOOK_PORT=5050
       - APP_ID=${SUPPORT_BOT_APP_ID:-}
       - API_KEY=${SUPPORT_BOT_API_KEY:-}
@@ -35,7 +35,7 @@ services:
       context: ./apps/slash-commands
     container_name: ws-slash-commands
     environment:
-      - WORKSPHERE_URL=http://host.docker.internal:8080
+      - WORKSPHERE_URL=http://host.docker.internal:8088
       - WEBHOOK_PORT=5051
       - APP_ID=${SLASH_CMD_APP_ID:-}
       - API_KEY=${SLASH_CMD_API_KEY:-}

@@ -17,7 +17,7 @@ gateway:
   jwt:
     secret: ${SOCIAL_JWT_SECRET:a-long-random-secret-key-for-development-only-change-in-production-please}
   social-app:
-    url: ${SOCIAL_APP_URL:http://localhost:8080}
+    url: ${SOCIAL_APP_URL:http://localhost:8088}
   max-connections: ${WS_MAX_CONNECTIONS:100000}
 
 management:

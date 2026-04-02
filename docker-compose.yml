@@ -56,7 +56,7 @@ services:
     environment:
       AOEE_LISTEN_ADDR: "0.0.0.0:50051"
       AOEE_STORAGE_TYPE: http
-      AOEE_HTTP_URL: "http://host.docker.internal:8080"
+      AOEE_HTTP_URL: "http://host.docker.internal:8088"
       AOEE_WRITE_THROUGH: "true"
       RUST_LOG: info,aoee_storage=debug
     ports:
