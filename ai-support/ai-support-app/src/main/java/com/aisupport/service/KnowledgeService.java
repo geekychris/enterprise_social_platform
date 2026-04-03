@@ -2,8 +2,7 @@ package com.aisupport.service;
 
 import com.aisupport.persistence.entity.*;
 import com.aisupport.persistence.repository.*;
-import com.aisupport.search.LuceneSearchService;
-import com.aisupport.search.VectorSearchService;
+import com.aisupport.search.UnifiedSearchService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -26,21 +25,18 @@ public class KnowledgeService {
     private final KnowledgeSetRepository knowledgeSetRepository;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository chunkRepository;
-    private final LuceneSearchService luceneSearch;
-    private final VectorSearchService vectorSearch;
+    private final UnifiedSearchService unifiedSearch;
     private final OllamaService ollamaService;
 
     public KnowledgeService(KnowledgeSetRepository knowledgeSetRepository,
                             DocumentRepository documentRepository,
                             DocumentChunkRepository chunkRepository,
-                            LuceneSearchService luceneSearch,
-                            VectorSearchService vectorSearch,
+                            UnifiedSearchService unifiedSearch,
                             OllamaService ollamaService) {
         this.knowledgeSetRepository = knowledgeSetRepository;
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
-        this.luceneSearch = luceneSearch;
-        this.vectorSearch = vectorSearch;
+        this.unifiedSearch = unifiedSearch;
         this.ollamaService = ollamaService;
     }
 
@@ -118,11 +114,10 @@ public class KnowledgeService {
         documentRepository.deleteById(documentId);
 
         try {
-            luceneSearch.deleteDocument(ksId, documentId);
+            unifiedSearch.deleteDocument(ksId, documentId);
         } catch (IOException e) {
-            log.warn("Failed to delete from Lucene index: {}", e.getMessage());
+            log.warn("Failed to delete from search index: {}", e.getMessage());
         }
-        vectorSearch.deleteDocument(ksId, documentId);
     }
 
     // ── Chunking & Indexing ──────────────────────────────────────
@@ -162,11 +157,8 @@ public class KnowledgeService {
 
                 chunk = chunkRepository.save(chunk);
 
-                // Index in Lucene
-                luceneSearch.indexChunk(ksId, chunk.getId(), documentId, doc.getTitle(), chunkContent);
-
-                // Store in vector search
-                vectorSearch.store(ksId, chunk.getId(), documentId, embedding);
+                // Index in unified search (lexical + vector)
+                unifiedSearch.indexChunk(ksId, chunk.getId(), documentId, doc.getTitle(), chunkContent, embedding);
 
                 indexed++;
             } catch (Exception e) {
@@ -179,9 +171,6 @@ public class KnowledgeService {
         doc.setIndexed(true);
         doc.setUpdatedAt(OffsetDateTime.now());
         documentRepository.save(doc);
-
-        // Persist vectors to disk
-        vectorSearch.persist(ksId);
 
         log.info("Indexed document {} ({} chunks, {} successfully indexed)", documentId, chunks.size(), indexed);
         return indexed;
@@ -228,8 +217,8 @@ public class KnowledgeService {
         stats.put("documentCount", documentRepository.countByKnowledgeSetId(knowledgeSetId));
         stats.put("chunkCount", chunkRepository.countByKnowledgeSetId(knowledgeSetId));
         stats.put("totalTokens", getTotalTokenCount(knowledgeSetId));
-        stats.put("luceneDocCount", luceneSearch.getDocCount(knowledgeSetId));
-        stats.put("vectorCount", vectorSearch.getVectorCount(knowledgeSetId));
+        stats.put("luceneDocCount", unifiedSearch.getDocCount(knowledgeSetId));
+        stats.put("vectorCount", unifiedSearch.getVectorCount(knowledgeSetId));
         return stats;
     }
 

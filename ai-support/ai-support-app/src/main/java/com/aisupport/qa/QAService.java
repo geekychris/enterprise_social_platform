@@ -6,8 +6,8 @@ import com.aisupport.persistence.entity.InteractionEntity;
 import com.aisupport.persistence.repository.DocumentChunkRepository;
 import com.aisupport.persistence.repository.DocumentRepository;
 import com.aisupport.persistence.repository.InteractionRepository;
-import com.aisupport.search.LuceneSearchService;
-import com.aisupport.search.VectorSearchService;
+import com.aisupport.search.UnifiedSearchService;
+import com.aisupport.service.AnswerCacheService;
 import com.aisupport.service.KnowledgeService;
 import com.aisupport.service.OllamaService;
 import org.slf4j.Logger;
@@ -24,14 +24,14 @@ public class QAService {
     private static final Logger log = LoggerFactory.getLogger(QAService.class);
 
     private final KnowledgeService knowledgeService;
-    private final LuceneSearchService luceneSearch;
-    private final VectorSearchService vectorSearch;
+    private final UnifiedSearchService unifiedSearch;
     private final OllamaService ollamaService;
     private final DocumentChunkRepository chunkRepository;
     private final DocumentRepository documentRepository;
     private final InteractionRepository interactionRepository;
     private final QATraceService traceService;
     private final OllamaConfig ollamaConfig;
+    private final AnswerCacheService answerCacheService;
 
     @Value("${aisupport.qa.max-context-tokens:4000}")
     private int maxContextTokens;
@@ -42,20 +42,20 @@ public class QAService {
     @Value("${aisupport.qa.confidence-threshold:0.6}")
     private double confidenceThreshold;
 
-    public QAService(KnowledgeService knowledgeService, LuceneSearchService luceneSearch,
-                     VectorSearchService vectorSearch, OllamaService ollamaService,
+    public QAService(KnowledgeService knowledgeService, UnifiedSearchService unifiedSearch,
+                     OllamaService ollamaService,
                      DocumentChunkRepository chunkRepository, DocumentRepository documentRepository,
                      InteractionRepository interactionRepository, QATraceService traceService,
-                     OllamaConfig ollamaConfig) {
+                     OllamaConfig ollamaConfig, AnswerCacheService answerCacheService) {
         this.knowledgeService = knowledgeService;
-        this.luceneSearch = luceneSearch;
-        this.vectorSearch = vectorSearch;
+        this.unifiedSearch = unifiedSearch;
         this.ollamaService = ollamaService;
         this.chunkRepository = chunkRepository;
         this.documentRepository = documentRepository;
         this.interactionRepository = interactionRepository;
         this.traceService = traceService;
         this.ollamaConfig = ollamaConfig;
+        this.answerCacheService = answerCacheService;
     }
 
     public record QAResult(
@@ -75,6 +75,14 @@ public class QAService {
      */
     @Transactional
     public QAResult answer(long knowledgeSetId, String question, Long socialPostId, Long socialUserId) {
+        // Check answer cache first
+        var cached = answerCacheService.lookup(knowledgeSetId, question);
+        if (cached != null) {
+            log.info("Cache hit for simple QA on ks-{}", knowledgeSetId);
+            return new QAResult(cached.answer(), cached.confidence(), "CACHED", List.of(),
+                    cached.confidence() < confidenceThreshold, null, null);
+        }
+
         var trace = traceService.builder();
         trace.knowledgeSetId = knowledgeSetId;
         trace.question = question;
@@ -160,6 +168,9 @@ public class QAService {
                 return m;
             }).toList();
 
+            // Store in answer cache
+            answerCacheService.store(knowledgeSetId, question, answer, confidence, null);
+
             var result = recordInteraction(knowledgeSetId, question, socialPostId, socialUserId,
                     answer, confidence, method, citations, suggestHuman);
             trace.interactionId = result.interactionId();
@@ -186,7 +197,7 @@ public class QAService {
      * Returns ranked list of (knowledgeSetId, score, knowledgeSetName).
      */
     public List<Map<String, Object>> routeQuestion(String question) {
-        var results = vectorSearch.searchAll(question, 10);
+        var results = unifiedSearch.searchAllSemantic(question, 10);
         // Group by knowledge set and take best score
         Map<Long, Double> bestScores = new LinkedHashMap<>();
         for (var r : results) {
@@ -217,11 +228,11 @@ public class QAService {
                                    QATraceService.TraceBuilder trace) {
         // Hybrid search: combine lexical and semantic results
         trace.lexicalQuery = question;
-        var lexicalResults = luceneSearch.search(knowledgeSetId, question, topK);
+        var lexicalResults = unifiedSearch.searchLexical(knowledgeSetId, question, topK);
         trace.lexicalResults = lexicalResults.stream().map(LinkedHashMap::new).collect(Collectors.toList());
 
         trace.semanticQuery = question;
-        var semanticResults = vectorSearch.search(knowledgeSetId, question, topK);
+        var semanticResults = unifiedSearch.searchSemantic(knowledgeSetId, question, topK);
         trace.semanticResults = semanticResults.stream().map(LinkedHashMap::new).collect(Collectors.toList());
 
         // Merge and deduplicate by chunkId

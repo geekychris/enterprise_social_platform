@@ -1,7 +1,6 @@
 package com.aisupport.controller;
 
-import com.aisupport.search.LuceneSearchService;
-import com.aisupport.search.VectorSearchService;
+import com.aisupport.search.UnifiedSearchService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,12 +10,10 @@ import java.util.*;
 @RequestMapping("/api/search")
 public class SearchController {
 
-    private final LuceneSearchService luceneSearch;
-    private final VectorSearchService vectorSearch;
+    private final UnifiedSearchService unifiedSearch;
 
-    public SearchController(LuceneSearchService luceneSearch, VectorSearchService vectorSearch) {
-        this.luceneSearch = luceneSearch;
-        this.vectorSearch = vectorSearch;
+    public SearchController(UnifiedSearchService unifiedSearch) {
+        this.unifiedSearch = unifiedSearch;
     }
 
     @GetMapping("/lexical/{ksId}")
@@ -24,7 +21,7 @@ public class SearchController {
             @PathVariable long ksId,
             @RequestParam String q,
             @RequestParam(defaultValue = "5") int topK) {
-        return ResponseEntity.ok(luceneSearch.search(ksId, q, topK));
+        return ResponseEntity.ok(unifiedSearch.searchLexical(ksId, q, topK));
     }
 
     @GetMapping("/semantic/{ksId}")
@@ -32,7 +29,7 @@ public class SearchController {
             @PathVariable long ksId,
             @RequestParam String q,
             @RequestParam(defaultValue = "5") int topK) {
-        return ResponseEntity.ok(vectorSearch.search(ksId, q, topK));
+        return ResponseEntity.ok(unifiedSearch.searchSemantic(ksId, q, topK));
     }
 
     @GetMapping("/hybrid/{ksId}")
@@ -40,11 +37,9 @@ public class SearchController {
             @PathVariable long ksId,
             @RequestParam String q,
             @RequestParam(defaultValue = "5") int topK) {
-        var lexical = luceneSearch.search(ksId, q, topK);
-        var semantic = vectorSearch.search(ksId, q, topK);
+        var results = unifiedSearch.searchHybrid(ksId, q, topK);
         return ResponseEntity.ok(Map.of(
-                "lexical", lexical,
-                "semantic", semantic,
+                "results", results,
                 "knowledgeSetId", ksId,
                 "query", q
         ));
@@ -54,6 +49,6 @@ public class SearchController {
     public ResponseEntity<List<Map<String, Object>>> routeSearch(
             @RequestParam String q,
             @RequestParam(defaultValue = "5") int topK) {
-        return ResponseEntity.ok(vectorSearch.searchAll(q, topK));
+        return ResponseEntity.ok(unifiedSearch.searchAllSemantic(q, topK));
     }
 }

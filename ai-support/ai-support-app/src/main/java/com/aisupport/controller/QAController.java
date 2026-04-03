@@ -4,6 +4,7 @@ import com.aisupport.qa.AgenticQAService;
 import com.aisupport.qa.QAService;
 import com.aisupport.qa.QATraceService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -15,11 +16,14 @@ public class QAController {
     private final QAService qaService;
     private final AgenticQAService agenticQAService;
     private final QATraceService traceService;
+    private final JdbcTemplate jdbc;
 
-    public QAController(QAService qaService, AgenticQAService agenticQAService, QATraceService traceService) {
+    public QAController(QAService qaService, AgenticQAService agenticQAService,
+                        QATraceService traceService, JdbcTemplate jdbc) {
         this.qaService = qaService;
         this.agenticQAService = agenticQAService;
         this.traceService = traceService;
+        this.jdbc = jdbc;
     }
 
     @PostMapping("/ask")
@@ -101,7 +105,11 @@ public class QAController {
 
     @PostMapping("/feedback")
     public ResponseEntity<Map<String, String>> feedback(@RequestBody Map<String, Object> body) {
-        // TODO: record feedback on interaction
+        long interactionId = Long.parseLong(body.get("interactionId").toString());
+        int rating = ((Number) body.get("rating")).intValue();
+        String comment = (String) body.get("comment");
+        jdbc.update("UPDATE interactions SET rating = ?, rating_comment = ? WHERE id = ?",
+                rating, comment, interactionId);
         return ResponseEntity.ok(Map.of("status", "recorded"));
     }
 }

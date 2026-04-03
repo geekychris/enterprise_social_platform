@@ -4,10 +4,8 @@ import com.aisupport.config.OllamaConfig;
 import com.aisupport.persistence.repository.DocumentChunkRepository;
 import com.aisupport.persistence.repository.DocumentRepository;
 import com.aisupport.persistence.repository.InteractionRepository;
-import com.aisupport.search.LuceneSearchService;
-import com.aisupport.search.VectorSearchService;
-import com.aisupport.service.KnowledgeService;
-import com.aisupport.service.OllamaService;
+import com.aisupport.search.UnifiedSearchService;
+import com.aisupport.service.*;
 import com.aisupport.persistence.entity.InteractionEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,30 +28,43 @@ public class AgenticQAService {
             "\\[TOOL:(\\w+)\\(([^)]*)\\)\\]", Pattern.DOTALL);
 
     private final KnowledgeService knowledgeService;
-    private final LuceneSearchService luceneSearch;
-    private final VectorSearchService vectorSearch;
+    private final UnifiedSearchService unifiedSearch;
     private final OllamaService ollamaService;
     private final OllamaConfig ollamaConfig;
     private final DocumentChunkRepository chunkRepository;
     private final DocumentRepository documentRepository;
     private final InteractionRepository interactionRepository;
     private final QATraceService traceService;
+    private final AnswerCacheService answerCacheService;
+    private final QueryExpansionService queryExpansionService;
+    private final GroundingService groundingService;
+    private final KnowledgeGapService knowledgeGapService;
+    private final ConversationMemoryService conversationMemoryService;
 
-    public AgenticQAService(KnowledgeService knowledgeService, LuceneSearchService luceneSearch,
-                            VectorSearchService vectorSearch, OllamaService ollamaService,
-                            OllamaConfig ollamaConfig, DocumentChunkRepository chunkRepository,
+    public AgenticQAService(KnowledgeService knowledgeService, UnifiedSearchService unifiedSearch,
+                            OllamaService ollamaService, OllamaConfig ollamaConfig,
+                            DocumentChunkRepository chunkRepository,
                             DocumentRepository documentRepository,
                             InteractionRepository interactionRepository,
-                            QATraceService traceService) {
+                            QATraceService traceService,
+                            AnswerCacheService answerCacheService,
+                            QueryExpansionService queryExpansionService,
+                            GroundingService groundingService,
+                            KnowledgeGapService knowledgeGapService,
+                            ConversationMemoryService conversationMemoryService) {
         this.knowledgeService = knowledgeService;
-        this.luceneSearch = luceneSearch;
-        this.vectorSearch = vectorSearch;
+        this.unifiedSearch = unifiedSearch;
         this.ollamaService = ollamaService;
         this.ollamaConfig = ollamaConfig;
         this.chunkRepository = chunkRepository;
         this.documentRepository = documentRepository;
         this.interactionRepository = interactionRepository;
         this.traceService = traceService;
+        this.answerCacheService = answerCacheService;
+        this.queryExpansionService = queryExpansionService;
+        this.groundingService = groundingService;
+        this.knowledgeGapService = knowledgeGapService;
+        this.conversationMemoryService = conversationMemoryService;
     }
 
     public record AgenticResult(
@@ -69,6 +80,16 @@ public class AgenticQAService {
 
     @Transactional
     public AgenticResult answer(long knowledgeSetId, String question, Long socialPostId, Long socialUserId) {
+        // Check answer cache first
+        log.info("AGENTIC: checking cache for ks-{} question='{}'", knowledgeSetId, question.substring(0, Math.min(50, question.length())));
+        var cached = answerCacheService.lookup(knowledgeSetId, question);
+        if (cached != null) {
+            log.info("AGENTIC CACHE HIT for ks-{}, returning cached answer (conf={})", knowledgeSetId, cached.confidence());
+            return new AgenticResult(cached.answer(), cached.confidence(), List.of(), List.of(),
+                    cached.confidence() < 0.6, null, null);
+        }
+        log.info("AGENTIC: no cache hit, proceeding with full pipeline");
+
         long totalTokens = knowledgeService.getTotalTokenCount(knowledgeSetId);
         var ks = knowledgeService.getKnowledgeSet(knowledgeSetId).orElse(null);
         String ksName = ks != null ? ks.getName() : "this topic";
@@ -77,10 +98,18 @@ public class AgenticQAService {
         List<Map<String, Object>> citations = new ArrayList<>();
         List<Map<String, String>> messages = new ArrayList<>();
 
+        // Build conversation context if this is part of a thread
+        String conversationContext = "";
+        if (socialPostId != null) {
+            conversationContext = conversationMemoryService.buildConversationContext(socialPostId);
+        }
+
         // Build system prompt with tool definitions
         String systemPrompt = buildAgenticSystemPrompt(ksName, knowledgeSetId, totalTokens);
         messages.add(Map.of("role", "system", "content", systemPrompt));
-        messages.add(Map.of("role", "user", "content", question));
+        String userMessage = conversationContext.isEmpty() ? question :
+                conversationContext + "\nCurrent question: " + question;
+        messages.add(Map.of("role", "user", "content", userMessage));
 
         String finalAnswer = null;
         long totalLlmMs = 0;
@@ -141,11 +170,29 @@ public class AgenticQAService {
         }
 
         double confidence = estimateConfidence(finalAnswer, steps);
+
+        // Run grounding verification against tool results
+        String allToolContext = steps.stream()
+                .filter(s -> !s.toolName().equals("none"))
+                .map(ToolStep::toolResult)
+                .reduce("", (a, b) -> a + "\n" + b);
+        var grounding = groundingService.verify(finalAnswer, allToolContext);
+        // Blend grounding score with heuristic confidence
+        confidence = (confidence + grounding.score()) / 2.0;
+
         boolean suggestHuman = confidence < 0.6;
+
+        // If confidence is very low, record a knowledge gap
+        if (confidence < 0.5) {
+            knowledgeGapService.recordGap(knowledgeSetId, question);
+        }
 
         if (suggestHuman && !finalAnswer.contains("human")) {
             finalAnswer += "\n\n---\n*I'm not fully confident in this answer. Would you like a human to help?*";
         }
+
+        // Store answer in cache
+        answerCacheService.store(knowledgeSetId, question, finalAnswer, confidence, null);
 
         // Record interaction
         var interaction = new InteractionEntity();
@@ -187,6 +234,14 @@ public class AgenticQAService {
         trace.contextTokenCount = steps.stream().mapToInt(s -> s.toolResult().length() / 4).sum();
         trace.citations = citations;
 
+        // Save grounding score to trace
+        Map<String, Object> groundingInfo = new LinkedHashMap<>();
+        groundingInfo.put("groundingScore", grounding.score());
+        groundingInfo.put("supportedClaims", grounding.supportedClaims().size());
+        groundingInfo.put("unsupportedClaims", grounding.unsupportedClaims().size());
+        trace.contextChunks = new ArrayList<>(trace.contextChunks);
+        ((List<Map<String, Object>>) trace.contextChunks).add(groundingInfo);
+
         long traceId = traceService.save(trace);
 
         return new AgenticResult(finalAnswer, confidence, steps, citations, suggestHuman, interaction.getId(), traceId);
@@ -196,7 +251,7 @@ public class AgenticQAService {
         try {
             return switch (toolName) {
                 case "search_lexical" -> {
-                    var results = luceneSearch.search(knowledgeSetId, args, 5);
+                    var results = unifiedSearch.searchLexical(knowledgeSetId, args, 5);
                     StringBuilder sb = new StringBuilder("Lexical search results for '" + args + "':\n\n");
                     for (var r : results) {
                         sb.append("--- Chunk ").append(r.get("chunkId")).append(" (doc: ").append(r.get("documentId"))
@@ -210,21 +265,47 @@ public class AgenticQAService {
                     yield sb.toString();
                 }
                 case "search_semantic" -> {
-                    var results = vectorSearch.search(knowledgeSetId, args, 5);
+                    var results = unifiedSearch.searchSemantic(knowledgeSetId, args, 5);
                     StringBuilder sb = new StringBuilder("Semantic search results for '" + args + "':\n\n");
-                    for (var r : results) {
-                        long chunkId = (long) r.get("chunkId");
-                        var chunk = chunkRepository.findById(chunkId).orElse(null);
-                        sb.append("--- Chunk ").append(chunkId)
+                    for (var r : new ArrayList<>(results)) {
+                        sb.append("--- Chunk ").append(r.get("chunkId"))
                                 .append(" (doc: ").append(r.get("documentId"))
                                 .append(", similarity: ").append(String.format("%.3f", ((Number) r.get("score")).doubleValue()))
                                 .append(") ---\n");
-                        if (chunk != null) {
-                            sb.append(chunk.getContent()).append("\n\n");
-                        }
+                        if (r.get("content") != null) sb.append(r.get("content")).append("\n\n");
                         addCitation(citations, r);
+                        // Also get neighbor chunks for expanded context
+                        var neighbors = unifiedSearch.getNeighborChunks(knowledgeSetId,
+                                ((Number) r.get("documentId")).longValue(),
+                                ((Number) r.get("chunkId")).longValue(), 1);
+                        for (var n : neighbors) {
+                            sb.append("[Neighbor chunk ").append(n.get("chunkId")).append("] ");
+                            if (n.get("content") != null) sb.append(n.get("content")).append("\n\n");
+                        }
                     }
                     if (results.isEmpty()) sb.append("No results found.");
+                    yield sb.toString();
+                }
+                case "search_expanded" -> {
+                    var expanded = queryExpansionService.expand(args);
+                    StringBuilder sb = new StringBuilder("Expanded search across " + expanded.size() + " queries:\n\n");
+                    Set<Long> seenChunks = new HashSet<>();
+                    for (String q : expanded) {
+                        var results = unifiedSearch.searchHybrid(knowledgeSetId, q, 3);
+                        for (var r : results) {
+                            long cId = ((Number) r.get("chunkId")).longValue();
+                            if (seenChunks.add(cId)) {
+                                sb.append("--- Chunk ").append(cId)
+                                        .append(" (doc: ").append(r.get("documentId"))
+                                        .append(", score: ").append(String.format("%.3f", ((Number) r.get("score")).doubleValue()))
+                                        .append(") ---\n");
+                                if (r.get("title") != null) sb.append("Title: ").append(r.get("title")).append("\n");
+                                if (r.get("content") != null) sb.append(r.get("content")).append("\n\n");
+                                addCitation(citations, r);
+                            }
+                        }
+                    }
+                    if (seenChunks.isEmpty()) sb.append("No results found.");
                     yield sb.toString();
                 }
                 case "get_document" -> {
@@ -294,6 +375,7 @@ public class AgenticQAService {
                 Available tools:
                 [TOOL:search_semantic(your search query)] — Find relevant content by meaning. USE THIS FIRST.
                 [TOOL:search_lexical(keywords)] — Keyword search for specific terms.
+                [TOOL:search_expanded(query)] — Expanded search using multiple query variations for broader coverage.
                 [TOOL:get_document(document_id)] — Get full document by numeric ID.
                 [TOOL:list_documents()] — List all documents and their IDs.
                 %s
