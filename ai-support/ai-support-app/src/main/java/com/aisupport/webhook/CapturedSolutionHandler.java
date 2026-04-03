@@ -83,4 +83,50 @@ public class CapturedSolutionHandler {
             }
         }
     }
+
+    /**
+     * Capture a helpful answer from another user (not "I solved it" but "you should try X").
+     * These are always queued for review since they come from community members
+     * answering other people's questions.
+     */
+    @Transactional
+    public void checkForAnswer(long knowledgeSetId, String content, long postId,
+                                long authorId, String authorName) {
+        if (content == null || content.length() < 30) return;
+
+        boolean isTrusted = TRUSTED_USER_IDS.contains(authorId);
+        String sourceType = isTrusted ? "SUPPORT" : "COMMUNITY_ANSWER";
+
+        log.info("Captured answer from {} ({}) in ks-{}", authorName, sourceType, knowledgeSetId);
+
+        var solution = new CapturedSolutionEntity();
+        solution.setKnowledgeSetId(knowledgeSetId);
+        solution.setQuestion("(answer on post " + postId + ")");
+        solution.setSolution(content);
+        solution.setSourceUserId(authorId);
+        solution.setSourceUsername(authorName);
+        solution.setSourceType(sourceType);
+
+        if (isTrusted) {
+            solution.setStatus("AUTO_PROMOTED");
+            solution.setReviewedAt(OffsetDateTime.now());
+            solution.setReviewerNotes("Auto-promoted: answer from trusted user " + authorName);
+            solution = capturedSolutionRepository.save(solution);
+
+            var doc = knowledgeService.addDocument(
+                    knowledgeSetId,
+                    "Answer by " + authorName + " (post " + postId + ")",
+                    content,
+                    null,
+                    "CURATED"
+            );
+            knowledgeService.indexDocument(doc.getId());
+            solution.setPromotedToDocumentId(doc.getId());
+            capturedSolutionRepository.save(solution);
+            log.info("Auto-promoted answer from {} to document {}", authorName, doc.getId());
+        } else {
+            solution.setStatus("PENDING");
+            capturedSolutionRepository.save(solution);
+        }
+    }
 }

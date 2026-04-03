@@ -3,6 +3,7 @@ package com.social.app.service;
 import com.social.app.persistence.entity.CommentEntity;
 import com.social.app.persistence.repository.AttachmentRepository;
 import com.social.app.persistence.repository.CommentRepository;
+import com.social.app.persistence.repository.PostRepository;
 import com.social.core.dto.CommentDto;
 import com.social.core.dto.CreateCommentRequest;
 import com.social.core.dto.UserSummaryDto;
@@ -22,6 +23,7 @@ import java.util.Optional;
 public class CommentService {
 
     private final CommentRepository commentRepository;
+    private final PostRepository postRepository;
     private final GlobalIdGenerator idGenerator;
     private final UserService userService;
     private final AttachmentRepository attachmentRepository;
@@ -33,6 +35,7 @@ public class CommentService {
     private final MessageBroadcastService broadcastService;
 
     public CommentService(CommentRepository commentRepository,
+                          PostRepository postRepository,
                           GlobalIdGenerator idGenerator,
                           UserService userService,
                           AttachmentRepository attachmentRepository,
@@ -43,6 +46,7 @@ public class CommentService {
                           CacheService cacheService,
                           MessageBroadcastService broadcastService) {
         this.commentRepository = commentRepository;
+        this.postRepository = postRepository;
         this.idGenerator = idGenerator;
         this.userService = userService;
         this.attachmentRepository = attachmentRepository;
@@ -89,12 +93,19 @@ public class CommentService {
         } catch (Exception e) { /* don't affect main flow */ }
 
         try {
-            appService.publishEvent("COMMENT_CREATED", "POST", saved.getPostId(), Map.of(
-                "commentId", saved.getId(),
+            var commentPayload = Map.of(
+                "commentId", (Object) saved.getId(),
                 "postId", saved.getPostId(),
                 "authorId", saved.getAuthorId(),
                 "content", saved.getContent() != null ? saved.getContent() : ""
-            ));
+            );
+            // Publish at POST level
+            appService.publishEvent("COMMENT_CREATED", "POST", saved.getPostId(), commentPayload);
+            // Also publish at PAGE/GROUP level so page-installed apps receive comments
+            var post = postRepository.findById(saved.getPostId()).orElse(null);
+            if (post != null && post.getTargetType() != null && post.getTargetId() != null) {
+                appService.publishEvent("COMMENT_CREATED", post.getTargetType(), post.getTargetId(), commentPayload);
+            }
         } catch (Exception e) { /* don't block comment creation */ }
 
         // Evict parent post cache so comment count updates

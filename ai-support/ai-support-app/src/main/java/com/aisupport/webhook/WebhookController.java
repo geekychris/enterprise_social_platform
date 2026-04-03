@@ -83,9 +83,13 @@ public class WebhookController {
 
             log.info("Found knowledge set: {} (id={})", knowledgeSet.getName(), knowledgeSet.getId());
 
+            // The webhook envelope always puts payload under "post" key regardless of event type
+            JsonNode eventData = data.has("post") ? data.path("post") :
+                    data.has("comment") ? data.path("comment") : data;
+
             switch (event) {
-                case "POST_CREATED" -> handlePost(knowledgeSet.getId(), data.path("post"));
-                case "COMMENT_CREATED" -> handleComment(knowledgeSet.getId(), data.path("comment"));
+                case "POST_CREATED" -> handlePost(knowledgeSet.getId(), eventData);
+                case "COMMENT_CREATED" -> handleComment(knowledgeSet.getId(), eventData);
                 default -> log.info("Unhandled event type: {}", event);
             }
         } catch (Exception e) {
@@ -134,30 +138,95 @@ public class WebhookController {
         String content = comment.path("content").asText("");
         long postId = comment.has("postId") ? comment.path("postId").asLong() : comment.path("post_id").asLong();
         long commentId = comment.has("commentId") ? comment.path("commentId").asLong() : comment.path("id").asLong();
-        long authorId = comment.path("author").path("id").asLong();
+        // Handle both flat (authorId) and nested (author.id) formats
+        long authorId = comment.has("authorId") ? comment.path("authorId").asLong() :
+                comment.path("author").path("id").asLong();
+        String authorName = comment.has("authorName") ? comment.path("authorName").asText("") :
+                comment.path("author").path("displayName").asText("");
+
+        log.info("handleComment: ksId={}, postId={}, authorId={}, content={}...",
+                ksId, postId, authorId, content.substring(0, Math.min(60, content.length())));
 
         // Don't respond to our own comments (prevent loops)
-        if (socialClient.isBotUser(authorId)) return;
+        if (socialClient.isBotUser(authorId)) {
+            log.debug("Skipping bot comment from authorId={}", authorId);
+            return;
+        }
 
-        // Check if it's a question
-        if (isQuestion(content)) {
-            socialClient.postComment(postId, "\uD83E\uDD16 *Looking into this... one moment.*");
-            var result = agenticQaService.answer(ksId, content, postId, authorId);
-            socialClient.postComment(postId, result.answer());
+        // Classify the intent of this comment
+        CommentIntent intent = classifyComment(content);
+        log.info("Comment classified as: {} (from {} on post {})", intent, authorName, postId);
 
-            if (result.suggestHuman()) {
-                socialClient.createSupportCase(
-                        "Follow-up question escalated",
-                        "Question: " + content,
-                        postId, commentId
-                );
+        switch (intent) {
+            case QUESTION -> {
+                socialClient.postComment(postId, "\uD83E\uDD16 *Looking into this... one moment.*");
+                var result = agenticQaService.answer(ksId, content, postId, authorId);
+                socialClient.postComment(postId, result.answer());
+                if (result.suggestHuman()) {
+                    socialClient.createSupportCase("Follow-up question escalated", "Question: " + content, postId, commentId);
+                }
             }
-        } else {
-            // Check for resolution patterns
-            solutionHandler.checkForSolution(ksId, content, postId, authorId,
-                    comment.path("author").path("displayName").asText(""));
+            case SOLUTION -> {
+                solutionHandler.checkForSolution(ksId, content, postId, authorId, authorName);
+            }
+            case ANSWER -> {
+                // Someone is providing a helpful answer (not necessarily "I solved it")
+                solutionHandler.checkForAnswer(ksId, content, postId, authorId, authorName);
+            }
+            case OTHER -> {
+                log.debug("Comment classified as OTHER, no action taken");
+            }
         }
     }
+
+    private enum CommentIntent { QUESTION, SOLUTION, ANSWER, OTHER }
+
+    /**
+     * Classify whether a comment is a question, a self-reported solution,
+     * someone providing a helpful answer, or general conversation.
+     */
+    private CommentIntent classifyComment(String text) {
+        if (text == null || text.isBlank()) return CommentIntent.OTHER;
+        String lower = text.toLowerCase().trim();
+
+        // Check for question patterns
+        if (QUESTION_PATTERN.matcher(lower).find()) {
+            return CommentIntent.QUESTION;
+        }
+
+        // Check for self-reported solutions ("I solved...", "I fixed...", "figured it out...")
+        if (SOLUTION_PATTERN.matcher(lower).find()) {
+            return CommentIntent.SOLUTION;
+        }
+
+        // Check for answer patterns ("you need to...", "try this...", "the solution is...")
+        if (ANSWER_PATTERN.matcher(lower).find()) {
+            return CommentIntent.ANSWER;
+        }
+
+        // If it's long enough and contains technical content, treat as potential answer
+        if (lower.length() > 100 && (lower.contains("step") || lower.contains("first") ||
+                lower.contains("install") || lower.contains("config") || lower.contains("set") ||
+                lower.contains("run") || lower.contains("command"))) {
+            return CommentIntent.ANSWER;
+        }
+
+        return CommentIntent.OTHER;
+    }
+
+    private static final Pattern SOLUTION_PATTERN = Pattern.compile(
+            "(i solved|i fixed|solution was|the fix is|figured it out|resolved by|" +
+            "worked for me|this worked|the answer is|i found that|turns out|" +
+            "problem was|issue was|root cause|workaround is)",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern ANSWER_PATTERN = Pattern.compile(
+            "(you need to|you should|you can|try this|here's how|the way to|to do this|" +
+            "the solution is|what works is|have you tried|make sure you|check that|" +
+            "you'll want to|the trick is|for this you|in my experience)",
+            Pattern.CASE_INSENSITIVE
+    );
 
     private boolean isQuestion(String text) {
         if (text == null || text.isBlank()) return false;
