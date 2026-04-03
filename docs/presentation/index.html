@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkSphere — Enterprise Social Platform</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/night.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+<style>
+:root {
+  --primary: #4f46e5;
+  --accent: #10B981;
+  --bg-dark: #0f172a;
+  --text-muted: #94a3b8;
+}
+.reveal { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.reveal h1, .reveal h2, .reveal h3 { color: #e2e8f0; font-weight: 700; text-transform: none; }
+.reveal h1 { font-size: 2.2em; }
+.reveal h2 { font-size: 1.6em; border-bottom: 3px solid var(--primary); padding-bottom: 0.3em; display: inline-block; }
+.reveal h3 { font-size: 1.2em; color: var(--accent); }
+.reveal ul { text-align: left; }
+.reveal li { margin-bottom: 0.4em; font-size: 0.85em; }
+.reveal .subtitle { color: var(--text-muted); font-size: 0.9em; margin-top: 0.5em; }
+.reveal .badge { display: inline-block; background: var(--primary); color: white; padding: 0.2em 0.7em; border-radius: 1em; font-size: 0.7em; margin: 0.15em; }
+.reveal .badge-green { background: var(--accent); }
+.reveal .badge-orange { background: #f59e0b; }
+.reveal .section-title { font-size: 2.4em; color: var(--primary); }
+.reveal .section-subtitle { color: var(--text-muted); font-size: 1.1em; }
+.reveal table { margin: 0 auto; font-size: 0.7em; border-collapse: collapse; }
+.reveal table th { background: var(--primary); color: white; padding: 0.5em 1em; }
+.reveal table td { padding: 0.4em 1em; border-bottom: 1px solid #334155; }
+.reveal table tr:nth-child(even) td { background: rgba(79,70,229,0.08); }
+.reveal table tr:nth-child(odd) td { background: rgba(255,255,255,0.03); }
+.reveal .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; text-align: center; }
+.reveal .stat-box { background: rgba(79,70,229,0.15); border: 1px solid var(--primary); border-radius: 0.7em; padding: 1em; }
+.reveal .stat-box .number { font-size: 2em; font-weight: 800; color: var(--primary); }
+.reveal .stat-box .label { font-size: 0.7em; color: var(--text-muted); }
+.reveal .tech-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5em; }
+.reveal .logo-placeholder { width: 120px; height: 120px; border: 2px dashed var(--primary); border-radius: 1em; display: flex; align-items: center; justify-content: center; margin: 0 auto 1em; color: var(--text-muted); font-size: 0.7em; }
+.reveal .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; text-align: left; }
+.reveal .card { background: rgba(255,255,255,0.05); border-radius: 0.5em; padding: 1em; border-left: 3px solid var(--primary); }
+.reveal .card-accent { border-left-color: var(--accent); }
+.reveal code { font-size: 0.8em; }
+.reveal pre code { font-size: 0.65em; max-height: 420px; }
+.reveal .mermaid { font-size: 0.6em; }
+.reveal .mermaid svg { max-height: 500px; }
+.reveal .flow-arrow { color: var(--accent); font-size: 1.5em; }
+.reveal section .small { font-size: 0.65em; color: var(--text-muted); }
+.reveal .emoji { font-style: normal; }
+.reveal .highlight-box { background: linear-gradient(135deg, rgba(79,70,229,0.2), rgba(16,185,129,0.2)); border-radius: 0.7em; padding: 1.2em; margin: 0.5em 0; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- SECTION 1: INTRODUCTION -->
+<!-- ============================================================ -->
+
+<!-- Slide 1: Title -->
+<section data-background-gradient="linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)">
+  <div class="logo-placeholder">LOGO</div>
+  <h1 style="margin-bottom:0.1em;">WorkSphere</h1>
+  <p class="subtitle" style="font-size:1.1em;">Enterprise Social Platform</p>
+  <br>
+  <p style="color:#cbd5e1; font-size:0.85em;">Multi-tenant &bull; Real-time &bull; AI-powered Collaboration</p>
+  <br>
+  <div style="display:flex; justify-content:center; gap:0.5em; flex-wrap:wrap;">
+    <span class="badge">Spring Boot 3.4</span>
+    <span class="badge badge-green">React 18</span>
+    <span class="badge badge-orange">SwiftUI</span>
+    <span class="badge">Jetpack Compose</span>
+  </div>
+  <aside class="notes">Welcome to the WorkSphere platform overview. This presentation covers our full-stack enterprise social platform.</aside>
+</section>
+
+<!-- Slide 2: What is WorkSphere? -->
+<section>
+  <h2>What is WorkSphere?</h2>
+  <br>
+  <div class="two-col">
+    <div class="card">
+      <h3>&#x1F4F1; Multi-Client</h3>
+      <ul>
+        <li class="fragment">React 18 Web App</li>
+        <li class="fragment">iOS (SwiftUI)</li>
+        <li class="fragment">Android (Jetpack Compose)</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h3>&#x1F680; Core Capabilities</h3>
+      <ul>
+        <li class="fragment">Real-time messaging via WebSocket</li>
+        <li class="fragment">AI-powered Roid Bot (Ollama)</li>
+        <li class="fragment">Org hierarchy & structure</li>
+        <li class="fragment">ML-based feed ranking</li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">WorkSphere is a complete enterprise social platform with three native clients and AI integration.</aside>
+</section>
+
+<!-- Slide 3: Key Stats -->
+<section>
+  <h2>Key Stats</h2>
+  <br>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="number">21</div><div class="label">Database Migrations</div></div>
+    <div class="stat-box"><div class="number">125+</div><div class="label">Tests</div></div>
+    <div class="stat-box"><div class="number">14</div><div class="label">Kafka Topics</div></div>
+    <div class="stat-box"><div class="number">11</div><div class="label">Iceberg Tables</div></div>
+    <div class="stat-box"><div class="number">3</div><div class="label">Tenants</div></div>
+    <div class="stat-box"><div class="number">2</div><div class="label">Native Apps</div></div>
+  </div>
+</section>
+
+<!-- Slide 4: Technology Stack -->
+<section>
+  <h2>Technology Stack</h2>
+  <br>
+  <table>
+    <tr><th>Layer</th><th>Technology</th></tr>
+    <tr><td>&#x2699;&#xFE0F; Backend</td><td>Spring Boot 3.4, Java 21, Netty</td></tr>
+    <tr><td>&#x1F310; Frontend</td><td>React 18, TypeScript, Vite</td></tr>
+    <tr><td>&#x1F4F1; iOS</td><td>SwiftUI, Combine, WebSocket</td></tr>
+    <tr><td>&#x1F4F1; Android</td><td>Jetpack Compose, Kotlin, OkHttp</td></tr>
+    <tr><td>&#x1F5C4;&#xFE0F; Database</td><td>PostgreSQL 16, Redis 7</td></tr>
+    <tr><td>&#x1F4E8; Streaming</td><td>Kafka, Spark, Iceberg</td></tr>
+    <tr><td>&#x1F916; AI</td><td>Ollama (Llama 3), Embeddings</td></tr>
+    <tr><td>&#x1F4E6; Storage</td><td>MinIO (S3-compatible)</td></tr>
+    <tr><td>&#x1F50D; Search</td><td>OpenSearch</td></tr>
+    <tr><td>&#x1F4CA; Analytics</td><td>Trino, Apache Airflow</td></tr>
+  </table>
+</section>
+
+<!-- Slide 5: Platform at a Glance -->
+<section>
+  <h2>Platform at a Glance</h2>
+  <div class="mermaid">
+graph TB
+    subgraph Clients
+        WEB["React Web App"]
+        IOS["iOS SwiftUI"]
+        AND["Android Compose"]
+    end
+    subgraph API Layer
+        GW["WebSocket Gateway<br/>(Netty)"]
+        APP["Spring Boot API<br/>(REST + WS)"]
+    end
+    subgraph Data
+        PG["PostgreSQL"]
+        RD["Redis"]
+        OS["OpenSearch"]
+        MO["MinIO"]
+    end
+    subgraph Streaming
+        KF["Kafka"]
+        SP["Spark"]
+        IC["Iceberg"]
+    end
+    subgraph AI & Analytics
+        OL["Ollama"]
+        TR["Trino"]
+        AF["Airflow"]
+    end
+    subgraph Services
+        AOEE["AOEE Graph<br/>(Rust gRPC)"]
+    end
+    WEB --> APP
+    IOS --> GW
+    AND --> GW
+    GW <--> RD
+    APP --> PG
+    APP --> RD
+    APP --> OS
+    APP --> MO
+    APP --> KF
+    APP --> OL
+    APP --> AOEE
+    KF --> SP
+    SP --> IC
+    IC --> TR
+    AF --> TR
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: FEATURES -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F3AF; Features</p>
+  <p class="section-subtitle">What users can do with WorkSphere</p>
+</section>
+
+<!-- Slide 6: Feed & Posts -->
+<section>
+  <h2>Feed &amp; Posts</h2>
+  <br>
+  <div class="two-col">
+    <div>
+      <h3>&#x1F4F0; Feed System</h3>
+      <ul>
+        <li class="fragment">Organic feed (chronological)</li>
+        <li class="fragment">Recommended feed (ML-ranked)</li>
+        <li class="fragment">Tenant-isolated content</li>
+        <li class="fragment">Infinite scroll pagination</li>
+      </ul>
+    </div>
+    <div>
+      <h3>&#x270D;&#xFE0F; Post Features</h3>
+      <ul>
+        <li class="fragment">Rich text with Markdown</li>
+        <li class="fragment">Polls with live results</li>
+        <li class="fragment">Reactions (&#x1F44D; &#x2764;&#xFE0F; &#x1F389; &#x1F4A1; &#x1F525;)</li>
+        <li class="fragment">Threaded comments</li>
+        <li class="fragment">Image/file attachments (MinIO)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 7: Real-time Messaging -->
+<section>
+  <h2>Real-time Messaging</h2>
+  <br>
+  <div class="two-col">
+    <div class="card">
+      <h3>&#x1F4AC; Conversations</h3>
+      <ul>
+        <li>Direct messages (1:1)</li>
+        <li>Group conversations</li>
+        <li>@ mentions with notifications</li>
+        <li>Message history & search</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h3>&#x26A1; Real-time</h3>
+      <ul>
+        <li>WebSocket gateway (Netty)</li>
+        <li>Typing indicators</li>
+        <li>Unread count badges</li>
+        <li>Online presence tracking</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <div class="highlight-box fragment">
+    <strong>Performance:</strong> Sub-50ms message delivery &bull; Redis pub/sub relay for multi-node
+  </div>
+</section>
+
+<!-- Slide 8: AI Integration -->
+<section>
+  <h2>&#x1F916; AI Integration — Roid Bot</h2>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Summarize conversations</strong> — get TL;DR of long threads</li>
+    <li class="fragment"><strong>Answer questions</strong> — context-aware Q&A from conversation history</li>
+    <li class="fragment"><strong>Create posts &amp; polls</strong> — draft content from natural language</li>
+    <li class="fragment"><strong>Org queries</strong> — "Who reports to Jane?" via graph traversal</li>
+    <li class="fragment"><strong>Cross-conversation memory</strong> — remembers prior interactions</li>
+  </ul>
+  <br>
+  <div class="fragment highlight-box">
+    <strong>Stack:</strong> Ollama (Llama 3) &bull; Streaming responses &bull; Tool calling &bull; Tenant-scoped context
+  </div>
+  <aside class="notes">The Roid Bot uses Ollama locally for privacy. No data leaves the infrastructure.</aside>
+</section>
+
+<!-- Slide 9: Groups, Pages & Organization -->
+<section>
+  <h2>Groups, Pages &amp; Organization</h2>
+  <br>
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1em;">
+    <div class="card">
+      <h3>&#x1F465; Groups</h3>
+      <ul style="font-size:0.8em;">
+        <li>Collaborative spaces</li>
+        <li>Members can post</li>
+        <li>Join/leave freely</li>
+        <li>Group conversations</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h3>&#x1F4C4; Pages</h3>
+      <ul style="font-size:0.8em;">
+        <li>Broadcast channels</li>
+        <li>Admin-only posting</li>
+        <li>Follow for updates</li>
+        <li>Official announcements</li>
+      </ul>
+    </div>
+    <div class="card" style="border-left-color:#f59e0b;">
+      <h3>&#x1F3E2; Org Structure</h3>
+      <ul style="font-size:0.8em;">
+        <li>Hierarchical tree view</li>
+        <li>Manager relationships</li>
+        <li>Department grouping</li>
+        <li>Role-based access</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 10: Search & Discovery -->
+<section>
+  <h2>&#x1F50D; Search &amp; Discovery</h2>
+  <br>
+  <div class="mermaid">
+graph LR
+    Q["User Query"] --> OS["OpenSearch"]
+    Q --> DB["PostgreSQL Fallback"]
+    OS --> U["Users"]
+    OS --> G["Groups"]
+    OS --> P["Pages"]
+    OS --> PO["Posts"]
+    DB --> U2["Users"]
+    DB --> G2["Groups"]
+    style OS fill:#4f46e5,stroke:#4f46e5,color:white
+    style DB fill:#10B981,stroke:#10B981,color:white
+  </div>
+  <br>
+  <ul>
+    <li class="fragment">Full-text search via OpenSearch</li>
+    <li class="fragment">Automatic fallback to DB if OpenSearch unavailable</li>
+    <li class="fragment">Tenant-scoped results — no cross-tenant leakage</li>
+    <li class="fragment">Indexed on create/update via event listeners</li>
+  </ul>
+</section>
+
+<!-- Slide 11: Mobile Apps -->
+<section>
+  <h2>&#x1F4F1; Mobile Apps</h2>
+  <br>
+  <div class="two-col">
+    <div class="card">
+      <h3>&#xF8FF; iOS — SwiftUI</h3>
+      <ul>
+        <li>Native SwiftUI views</li>
+        <li>Combine for reactive data</li>
+        <li>URLSession WebSocket</li>
+        <li>Keychain token storage</li>
+        <li>Tenant selector on login</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h3>&#x1F916; Android — Compose</h3>
+      <ul>
+        <li>Jetpack Compose UI</li>
+        <li>Kotlin Coroutines + Flow</li>
+        <li>OkHttp WebSocket</li>
+        <li>EncryptedSharedPreferences</li>
+        <li>Multi-tenant support</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <p class="fragment small">Both apps share feature parity: feed, messaging, profiles, groups, org tree, notifications</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: ARCHITECTURE -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F3D7;&#xFE0F; Architecture</p>
+  <p class="section-subtitle">How WorkSphere is built under the hood</p>
+</section>
+
+<!-- Slide 12: System Architecture -->
+<section>
+  <h2>System Architecture</h2>
+  <div class="mermaid">
+graph TB
+    subgraph "Client Tier"
+        C1["Web (React)"]
+        C2["iOS (SwiftUI)"]
+        C3["Android (Compose)"]
+    end
+    subgraph "API Tier"
+        LB["Load Balancer"]
+        API1["App Server 1"]
+        API2["App Server N"]
+        WSG["WS Gateway (Netty)"]
+    end
+    subgraph "Cache Tier"
+        L1["L1: Caffeine (in-proc)"]
+        L2["L2: Redis Cluster"]
+    end
+    subgraph "Data Tier"
+        PG["PostgreSQL (RLS)"]
+        OS["OpenSearch"]
+        MIO["MinIO (S3)"]
+    end
+    subgraph "Streaming Tier"
+        KF["Kafka (14 topics)"]
+        SP["Spark Structured Streaming"]
+        ICE["Apache Iceberg (11 tables)"]
+    end
+    subgraph "AI + Analytics"
+        OLL["Ollama (Llama 3)"]
+        TRI["Trino"]
+        AIR["Airflow"]
+        AOEE["AOEE (Rust gRPC)"]
+    end
+    C1 & C2 & C3 --> LB
+    LB --> API1 & API2
+    LB --> WSG
+    API1 & API2 --> L1 --> L2
+    API1 & API2 --> PG & OS & MIO & KF & OLL & AOEE
+    WSG <--> L2
+    KF --> SP --> ICE
+    ICE --> TRI
+    AIR --> TRI
+  </div>
+</section>
+
+<!-- Slide 13: Request Flow -->
+<section>
+  <h2>Post Creation Flow</h2>
+  <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant API as Spring Boot
+    participant DB as PostgreSQL
+    participant C as Cache
+    participant K as Kafka
+    participant S as Spark
+    participant I as Iceberg
+    participant WH as Webhook
+    participant Bot as App Runtime
+    U->>API: POST /api/posts
+    API->>DB: INSERT post
+    API->>C: Evict feed cache
+    API->>K: Publish post.created
+    API-->>U: 201 Created
+    K->>S: Consume event
+    S->>I: Write to Iceberg
+    K->>WH: Notify installed apps
+    WH->>Bot: POST webhook payload
+    Bot-->>API: Reply via API
+  </div>
+</section>
+
+<!-- Slide 14: WebSocket Gateway -->
+<section>
+  <h2>&#x26A1; WebSocket Gateway</h2>
+  <br>
+  <div class="two-col">
+    <div>
+      <h3>Architecture</h3>
+      <ul>
+        <li class="fragment"><strong>Netty</strong> — non-blocking I/O</li>
+        <li class="fragment"><strong>100K connections/node</strong></li>
+        <li class="fragment"><strong>Redis pub/sub</strong> relay for multi-node</li>
+        <li class="fragment">Auto-subscribe on connect</li>
+        <li class="fragment">Heartbeat &amp; reconnection</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Message Types</h3>
+      <ul>
+        <li class="fragment">CHAT — new messages</li>
+        <li class="fragment">TYPING — indicators</li>
+        <li class="fragment">PRESENCE — online status</li>
+        <li class="fragment">NOTIFICATION — alerts</li>
+        <li class="fragment">FEED_UPDATE — new posts</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <div class="fragment highlight-box">
+    <strong>Flow:</strong> Client &rarr; WS Gateway &rarr; Redis pub/sub &rarr; All Gateway nodes &rarr; Target clients
+  </div>
+</section>
+
+<!-- Slide 15: AOEE Graph Cache -->
+<section>
+  <h2>AOEE Graph Cache</h2>
+  <br>
+  <div class="two-col">
+    <div>
+      <h3>&#x1F9E9; Design</h3>
+      <ul>
+        <li class="fragment">Rust gRPC server</li>
+        <li class="fragment">In-memory graph of relationships</li>
+        <li class="fragment">Write-through on mutations</li>
+        <li class="fragment">Read-through with DB fallback</li>
+      </ul>
+    </div>
+    <div>
+      <h3>&#x1F527; Implementation</h3>
+      <ul>
+        <li class="fragment">RawLongSerializer for numeric IDs</li>
+        <li class="fragment">Adjacency list representation</li>
+        <li class="fragment">Friends, followers, group members</li>
+        <li class="fragment">O(1) relationship lookups</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <pre class="fragment"><code class="language-protobuf">service GraphService {
+  rpc GetFriends (UserRequest) returns (UserList);
+  rpc GetFollowers (UserRequest) returns (UserList);
+  rpc AreFriends (PairRequest) returns (BoolReply);
+  rpc AddEdge (EdgeRequest) returns (Empty);
+}</code></pre>
+</section>
+
+<!-- Slide 16: Caching Strategy -->
+<section>
+  <h2>Caching Strategy</h2>
+  <br>
+  <div class="mermaid">
+graph LR
+    REQ["Request"] --> L1["L1: Caffeine<br/>In-process<br/>TTL: 5min"]
+    L1 -->|miss| L2["L2: Redis<br/>Shared<br/>TTL: 30min"]
+    L2 -->|miss| DB["PostgreSQL"]
+    DB -->|populate| L2
+    L2 -->|populate| L1
+    style L1 fill:#4f46e5,stroke:#4f46e5,color:white
+    style L2 fill:#10B981,stroke:#10B981,color:white
+    style DB fill:#f59e0b,stroke:#f59e0b,color:white
+  </div>
+  <br>
+  <table>
+    <tr><th>Data Type</th><th>L1 TTL</th><th>L2 TTL</th><th>Invalidation</th></tr>
+    <tr><td>User Profile</td><td>5 min</td><td>30 min</td><td>On update</td></tr>
+    <tr><td>Feed</td><td>2 min</td><td>15 min</td><td>On new post</td></tr>
+    <tr><td>Conversation</td><td>5 min</td><td>30 min</td><td>On message</td></tr>
+    <tr><td>Org Tree</td><td>10 min</td><td>60 min</td><td>On reorg</td></tr>
+    <tr><td>Group Members</td><td>5 min</td><td>30 min</td><td>On join/leave</td></tr>
+    <tr><td>Unread Counts</td><td>1 min</td><td>5 min</td><td>On read</td></tr>
+    <tr><td>Search Results</td><td>2 min</td><td>10 min</td><td>TTL only</td></tr>
+    <tr><td>Permissions</td><td>5 min</td><td>30 min</td><td>On role change</td></tr>
+  </table>
+</section>
+
+<!-- Slide 17: ID System -->
+<section>
+  <h2>&#x1F511; GlobalId System</h2>
+  <br>
+  <div class="highlight-box">
+    <strong>64-bit ID layout:</strong>
+    <pre style="margin:0.5em 0 0;"><code style="font-size:0.9em;">[8-bit type][16-bit tenant][40-bit sequence]
+|  entity  |   tenant   |     unique ID      |</code></pre>
+  </div>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Type extraction</strong> — bits 56-63 encode entity type (USER, POST, MESSAGE, ...)</li>
+    <li class="fragment"><strong>Tenant isolation</strong> — bits 40-55 encode tenant; queries physically cannot cross tenants</li>
+    <li class="fragment"><strong>Sequence</strong> — 40 bits = ~1 trillion IDs per type per tenant</li>
+    <li class="fragment"><strong>Single column</strong> — no composite keys; efficient JOINs &amp; indexes</li>
+  </ul>
+  <br>
+  <pre class="fragment"><code class="language-java">public static long create(EntityType type, int tenantId, long seq) {
+    return ((long) type.code() << 56)
+         | ((long) tenantId << 40)
+         | seq;
+}
+public static int extractTenant(long globalId) {
+    return (int) ((globalId >> 40) & 0xFFFF);
+}</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: MULTI-TENANCY -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F3E2; Multi-Tenancy</p>
+  <p class="section-subtitle">Complete data isolation with zero overhead</p>
+</section>
+
+<!-- Slide 18: Multi-Tenant Design -->
+<section>
+  <h2>4 Layers of Tenant Isolation</h2>
+  <br>
+  <div class="mermaid">
+graph TB
+    R["1. Request Layer<br/>TenantFilter extracts tenant from JWT"] --> H["2. Hibernate Layer<br/>@Filter auto-appends WHERE tenant_id = ?"]
+    H --> P["3. PostgreSQL RLS<br/>Row-Level Security policies"]
+    P --> I["4. ID Encoding<br/>GlobalId embeds tenant in every ID"]
+    style R fill:#4f46e5,stroke:#4f46e5,color:white
+    style H fill:#6366f1,stroke:#6366f1,color:white
+    style P fill:#818cf8,stroke:#818cf8,color:white
+    style I fill:#10B981,stroke:#10B981,color:white
+  </div>
+  <br>
+  <p class="fragment" style="font-size:0.85em;">Even a bug in layer 1-3 <strong>cannot</strong> leak data — the ID itself encodes the tenant boundary.</p>
+</section>
+
+<!-- Slide 19: Tenant Resolution -->
+<section>
+  <h2>Tenant Resolution Flow</h2>
+  <br>
+  <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant TF as TenantFilter
+    participant TC as TenantContext
+    participant HB as Hibernate
+    participant PG as PostgreSQL
+    C->>TF: Request with JWT
+    TF->>TF: Extract tenant_id from token
+    TF->>TC: TenantContext.set(tenantId)
+    TC->>HB: @Filter enabled
+    HB->>PG: SELECT ... WHERE tenant_id = 3
+    PG->>PG: RLS policy double-check
+    PG-->>C: Tenant-scoped results
+  </div>
+  <br>
+  <pre class="fragment"><code class="language-java">@Filter(name = "tenantFilter",
+        condition = "tenant_id = :tenantId")
+@Entity
+public class Post { ... }</code></pre>
+</section>
+
+<!-- Slide 20: Tenant Branding -->
+<section>
+  <h2>&#x1F3A8; Tenant Branding</h2>
+  <br>
+  <table>
+    <tr><th>Property</th><th>Tenant A (Acme)</th><th>Tenant B (Globex)</th><th>Tenant C (Initech)</th></tr>
+    <tr><td>Company Name</td><td>Acme Corp</td><td>Globex Inc</td><td>Initech LLC</td></tr>
+    <tr><td>Primary Color</td><td style="color:#4f46e5;">&#x25A0; #4f46e5</td><td style="color:#dc2626;">&#x25A0; #dc2626</td><td style="color:#059669;">&#x25A0; #059669</td></tr>
+    <tr><td>Logo URL</td><td>/branding/acme.png</td><td>/branding/globex.png</td><td>/branding/initech.png</td></tr>
+    <tr><td>Subdomain</td><td>acme.worksphere.io</td><td>globex.worksphere.io</td><td>initech.worksphere.io</td></tr>
+  </table>
+  <br>
+  <div class="fragment">
+    <p style="font-size:0.8em;">Applied dynamically in React via CSS custom properties:</p>
+    <pre><code class="language-javascript">document.documentElement.style
+  .setProperty('--primary', tenant.primaryColor);</code></pre>
+  </div>
+</section>
+
+<!-- Slide 21: Data Isolation Demo -->
+<section>
+  <h2>Data Isolation in Action</h2>
+  <br>
+  <div class="two-col">
+    <div class="card" style="border-left-color:#4f46e5;">
+      <h3 style="color:#4f46e5;">Tenant A — Acme Corp</h3>
+      <ul style="font-size:0.75em;">
+        <li>&#x1F464; 50 employees</li>
+        <li>&#x1F4DD; 1,200 posts</li>
+        <li>&#x1F465; 8 groups</li>
+        <li>&#x1F4AC; 340 conversations</li>
+        <li>&#x1F916; Roid Bot configured</li>
+      </ul>
+    </div>
+    <div class="card" style="border-left-color:#dc2626;">
+      <h3 style="color:#dc2626;">Tenant B — Globex Inc</h3>
+      <ul style="font-size:0.75em;">
+        <li>&#x1F464; 120 employees</li>
+        <li>&#x1F4DD; 3,800 posts</li>
+        <li>&#x1F465; 15 groups</li>
+        <li>&#x1F4AC; 890 conversations</li>
+        <li>&#x1F916; Roid Bot configured</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <div class="fragment highlight-box">
+    <strong>Zero cross-tenant visibility.</strong> Even shared infrastructure (Kafka, Redis, OpenSearch) maintains strict tenant boundaries through ID-based partitioning.
+  </div>
+</section>
+
+<!-- Slide 22: Tenant Admin -->
+<section>
+  <h2>&#x1F6E1;&#xFE0F; Tenant Administration</h2>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Super-admin</strong> creates tenants via admin API</li>
+    <li class="fragment">Each tenant gets an <strong>initial admin user</strong></li>
+    <li class="fragment"><strong>Tenant selector</strong> on login screen (web + mobile)</li>
+    <li class="fragment">Tenant admins manage their own users, groups, pages</li>
+    <li class="fragment">Audit log tracks all admin actions per tenant</li>
+  </ul>
+  <br>
+  <pre class="fragment"><code class="language-json">{
+  "name": "Acme Corp",
+  "slug": "acme",
+  "adminEmail": "admin@acme.com",
+  "primaryColor": "#4f46e5",
+  "logoUrl": "/branding/acme.png"
+}</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: DATA PIPELINE & WAREHOUSE -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F4CA; Data Pipeline &amp; Warehouse</p>
+  <p class="section-subtitle">From structured events to actionable analytics</p>
+</section>
+
+<!-- Slide 23: Structured Logging Pipeline -->
+<section>
+  <h2>Structured Logging Pipeline</h2>
+  <div class="mermaid">
+graph LR
+    SC["JSON Schema<br/>Definition"] --> CG["Code Generator<br/>(Java classes)"]
+    CG --> APP["App Server<br/>Emit events"]
+    APP --> KF["Kafka<br/>(14 topics)"]
+    KF --> SP["Spark Structured<br/>Streaming"]
+    SP --> IC["Apache Iceberg<br/>(11 tables)"]
+    IC --> TR["Trino<br/>SQL Queries"]
+    style SC fill:#f59e0b,stroke:#f59e0b,color:white
+    style KF fill:#4f46e5,stroke:#4f46e5,color:white
+    style IC fill:#10B981,stroke:#10B981,color:white
+    style TR fill:#818cf8,stroke:#818cf8,color:white
+  </div>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Schema-first</strong> — JSON schemas define every event</li>
+    <li class="fragment"><strong>Code generation</strong> — zero hand-written event classes</li>
+    <li class="fragment"><strong>Type-safe</strong> — compile-time validation of all events</li>
+    <li class="fragment"><strong>Real-time</strong> — events land in Iceberg within seconds</li>
+  </ul>
+</section>
+
+<!-- Slide 24: Entity CDC -->
+<section>
+  <h2>Entity Change Data Capture</h2>
+  <br>
+  <table>
+    <tr><th>Entity</th><th>CDC Topic</th><th>Iceberg Table</th></tr>
+    <tr><td>User</td><td>entity.user</td><td>warehouse.users</td></tr>
+    <tr><td>Post</td><td>entity.post</td><td>warehouse.posts</td></tr>
+    <tr><td>Comment</td><td>entity.comment</td><td>warehouse.comments</td></tr>
+    <tr><td>Message</td><td>entity.message</td><td>warehouse.messages</td></tr>
+    <tr><td>Reaction</td><td>entity.reaction</td><td>warehouse.reactions</td></tr>
+    <tr><td>Group</td><td>entity.group</td><td>warehouse.groups</td></tr>
+    <tr><td>Page</td><td>entity.page</td><td>warehouse.pages</td></tr>
+    <tr><td>Friendship</td><td>entity.friendship</td><td>warehouse.friendships</td></tr>
+    <tr><td>Follow</td><td>entity.follow</td><td>warehouse.follows</td></tr>
+  </table>
+  <br>
+  <p class="fragment small">Hourly incremental tables partitioned by tenant_id and event_date for efficient querying.</p>
+</section>
+
+<!-- Slide 25: Airflow Batch Processing -->
+<section>
+  <h2>&#x1F4C5; Airflow Batch Processing</h2>
+  <br>
+  <div class="mermaid">
+graph TB
+    subgraph "Daily DAG"
+        SIG["Signal Table Check"] --> INC["Hourly Incremental<br/>Tables Ready?"]
+        INC -->|yes| ALL["Build Daily ALL<br/>Snapshot Tables"]
+        ALL --> DAU["Compute DAU"]
+        ALL --> WAU["Compute WAU"]
+        ALL --> MAU["Compute MAU"]
+        DAU & WAU & MAU --> DASH["Dashboard Refresh"]
+    end
+    style SIG fill:#f59e0b,stroke:#f59e0b,color:white
+    style ALL fill:#4f46e5,stroke:#4f46e5,color:white
+    style DASH fill:#10B981,stroke:#10B981,color:white
+  </div>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Signal tables</strong> for dependency tracking — no blind retries</li>
+    <li class="fragment"><strong>DAU / WAU / MAU</strong> metrics computed per tenant</li>
+    <li class="fragment"><strong>Idempotent</strong> — safe to re-run on failure</li>
+  </ul>
+</section>
+
+<!-- Slide 26: Data Warehouse Tables -->
+<section>
+  <h2>Iceberg Table Hierarchy</h2>
+  <br>
+  <div class="mermaid">
+graph TB
+    RAW["Hourly Incremental<br/>(raw events)"] --> ALL["Daily ALL Snapshots<br/>(full state)"]
+    ALL --> MET["Metric Tables<br/>(aggregated)"]
+    RAW --> |"partitioned by"| PART["tenant_id + date"]
+    ALL --> |"partitioned by"| PART2["tenant_id + date"]
+    MET --> |"partitioned by"| PART3["tenant_id + date"]
+    style RAW fill:#f59e0b,stroke:#f59e0b,color:white
+    style ALL fill:#4f46e5,stroke:#4f46e5,color:white
+    style MET fill:#10B981,stroke:#10B981,color:white
+  </div>
+  <br>
+  <table>
+    <tr><th>Tier</th><th>Tables</th><th>Retention</th><th>Use Case</th></tr>
+    <tr><td>Hourly Incremental</td><td>11</td><td>30 days</td><td>Real-time analytics, debugging</td></tr>
+    <tr><td>Daily ALL</td><td>9</td><td>1 year</td><td>Historical analysis, trends</td></tr>
+    <tr><td>Metrics</td><td>5</td><td>Forever</td><td>KPIs, dashboards, reporting</td></tr>
+  </table>
+</section>
+
+<!-- Slide 27: ML Feed Ranking -->
+<section>
+  <h2>&#x1F9E0; ML Feed Ranking</h2>
+  <br>
+  <div class="two-col">
+    <div>
+      <h3>10 Features</h3>
+      <ul style="font-size:0.75em;">
+        <li>Post age (decay)</li>
+        <li>Author relationship score</li>
+        <li>Content type (text/poll/image)</li>
+        <li>Historical engagement rate</li>
+        <li>Comment count</li>
+        <li>Reaction count</li>
+        <li>Author post frequency</li>
+        <li>User activity in group</li>
+        <li>Time-of-day affinity</li>
+        <li>Content length signal</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Model Pipeline</h3>
+      <ul style="font-size:0.75em;">
+        <li class="fragment">Feature extraction from Iceberg</li>
+        <li class="fragment">XGBoost training (daily retrain)</li>
+        <li class="fragment">GBDT kernel code generation</li>
+        <li class="fragment">Compiled scorer in Java</li>
+        <li class="fragment">Sub-1ms scoring per post</li>
+      </ul>
+      <br>
+      <div class="fragment highlight-box" style="font-size:0.8em;">
+        <strong>No ML runtime dependency</strong> — XGBoost trees compiled to pure Java if/else chains
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 28: Querying the Warehouse -->
+<section>
+  <h2>Querying with Trino</h2>
+  <br>
+  <pre><code class="language-sql">-- Daily active users by tenant
+SELECT tenant_id,
+       event_date,
+       COUNT(DISTINCT user_id) AS dau
+FROM warehouse.user_activity_hourly
+WHERE event_date >= CURRENT_DATE - INTERVAL '30' DAY
+GROUP BY tenant_id, event_date
+ORDER BY event_date DESC;
+
+-- Top posts by engagement
+SELECT p.id, p.content_preview,
+       COUNT(DISTINCT r.user_id) AS reactions,
+       COUNT(DISTINCT c.id) AS comments
+FROM warehouse.posts_all p
+LEFT JOIN warehouse.reactions_all r ON r.post_id = p.id
+LEFT JOIN warehouse.comments_all c ON c.post_id = p.id
+WHERE p.tenant_id = 1
+  AND p.created_date = CURRENT_DATE
+GROUP BY 1, 2
+ORDER BY reactions + comments DESC
+LIMIT 20;</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: SCALABILITY -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F4C8; Scalability</p>
+  <p class="section-subtitle">From 100 to 100,000 users</p>
+</section>
+
+<!-- Slide 29: Database Scaling -->
+<section>
+  <h2>&#x1F5C4;&#xFE0F; Database Scaling</h2>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Composite indexes</strong> — (tenant_id, created_at DESC) on all major tables</li>
+    <li class="fragment"><strong>Message partitioning</strong> — by tenant for parallel scans</li>
+    <li class="fragment"><strong>Read replicas</strong> — @Transactional(readOnly=true) routes to replicas</li>
+    <li class="fragment"><strong>Connection pooling</strong> — HikariCP with per-tenant limits</li>
+  </ul>
+  <br>
+  <pre class="fragment"><code class="language-java">@Transactional(readOnly = true)  // → read replica
+public List&lt;Post&gt; getFeed(long userId) { ... }
+
+@Transactional                    // → primary
+public Post createPost(PostDTO dto) { ... }</code></pre>
+</section>
+
+<!-- Slide 30: Horizontal Scaling -->
+<section>
+  <h2>Horizontal Scaling</h2>
+  <br>
+  <div class="mermaid">
+graph TB
+    LB["Load Balancer"] --> A1["App Server 1"]
+    LB --> A2["App Server 2"]
+    LB --> A3["App Server N"]
+    A1 & A2 & A3 --> RD["Redis Pub/Sub"]
+    RD --> WS1["WS Gateway 1"]
+    RD --> WS2["WS Gateway 2"]
+    WS1 --> U1["Clients (pool 1)"]
+    WS2 --> U2["Clients (pool 2)"]
+    style LB fill:#4f46e5,stroke:#4f46e5,color:white
+    style RD fill:#dc2626,stroke:#dc2626,color:white
+  </div>
+  <br>
+  <ul>
+    <li class="fragment">Stateless app servers — scale horizontally</li>
+    <li class="fragment">Redis pub/sub relays messages across WS nodes</li>
+    <li class="fragment">Sticky sessions for WebSocket connections</li>
+    <li class="fragment">Kafka consumer groups auto-rebalance</li>
+  </ul>
+</section>
+
+<!-- Slide 31: AWS Deployment -->
+<section>
+  <h2>&#x2601;&#xFE0F; AWS Deployment (CDK)</h2>
+  <br>
+  <table>
+    <tr><th>CDK Stack</th><th>AWS Service</th><th>Purpose</th></tr>
+    <tr><td>VPC Stack</td><td>VPC, Subnets, NAT</td><td>Network isolation</td></tr>
+    <tr><td>Data Stack</td><td>RDS, ElastiCache</td><td>PostgreSQL + Redis</td></tr>
+    <tr><td>ECR Stack</td><td>ECR</td><td>Container registry</td></tr>
+    <tr><td>ECS Stack</td><td>ECS Fargate, ALB</td><td>App + Gateway containers</td></tr>
+    <tr><td>—</td><td>MSK</td><td>Managed Kafka</td></tr>
+    <tr><td>—</td><td>OpenSearch Service</td><td>Managed search</td></tr>
+    <tr><td>—</td><td>Glue + Athena</td><td>Warehouse (Iceberg)</td></tr>
+    <tr><td>—</td><td>MWAA</td><td>Managed Airflow</td></tr>
+  </table>
+</section>
+
+<!-- Slide 32: Capacity Planning -->
+<section>
+  <h2>Capacity Planning</h2>
+  <br>
+  <table>
+    <tr><th>Users</th><th>App Nodes</th><th>WS Nodes</th><th>DB</th><th>Redis</th><th>Est. Monthly Cost</th></tr>
+    <tr><td>100</td><td>1</td><td>1</td><td>db.t3.medium</td><td>cache.t3.small</td><td>~$200</td></tr>
+    <tr><td>1,000</td><td>2</td><td>1</td><td>db.r6g.large</td><td>cache.r6g.large</td><td>~$800</td></tr>
+    <tr><td>10,000</td><td>4</td><td>2</td><td>db.r6g.xlarge</td><td>cache.r6g.xlarge</td><td>~$2,500</td></tr>
+    <tr><td>50,000</td><td>8</td><td>4</td><td>db.r6g.2xlarge (+ replica)</td><td>Cluster (3 nodes)</td><td>~$8,000</td></tr>
+    <tr><td>100,000</td><td>16</td><td>8</td><td>db.r6g.4xlarge (+ 2 replicas)</td><td>Cluster (6 nodes)</td><td>~$18,000</td></tr>
+  </table>
+  <br>
+  <p class="fragment small">Estimates assume AWS us-east-1 pricing with reserved instances. Kafka and OpenSearch add ~30% to base cost.</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: APP PLATFORM -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F9E9; App Platform</p>
+  <p class="section-subtitle">Extensibility through webhooks and APIs</p>
+</section>
+
+<!-- Slide 33: App Platform Overview -->
+<section>
+  <h2>App Platform Overview</h2>
+  <br>
+  <div class="two-col">
+    <div>
+      <h3>&#x1F3D7;&#xFE0F; Architecture</h3>
+      <ul>
+        <li class="fragment">Independent runtimes (any language)</li>
+        <li class="fragment">Webhook-based event delivery</li>
+        <li class="fragment">API key authentication</li>
+        <li class="fragment">Granular permissions model</li>
+      </ul>
+    </div>
+    <div>
+      <h3>&#x1F4E6; Capabilities</h3>
+      <ul>
+        <li class="fragment">Receive events (posts, messages, commands)</li>
+        <li class="fragment">Reply via REST API</li>
+        <li class="fragment">Create posts, send messages</li>
+        <li class="fragment">Register slash commands</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <div class="fragment highlight-box">
+    <strong>Think:</strong> Slack Apps / GitHub Actions, but for WorkSphere
+  </div>
+</section>
+
+<!-- Slide 34: Event Delivery -->
+<section>
+  <h2>&#x1F4E8; Event Delivery</h2>
+  <br>
+  <div class="mermaid">
+graph LR
+    EV["Event Emitted"] --> Q["Per-App Queue"]
+    Q --> D["Dispatcher"]
+    D -->|POST| WH["App Webhook URL"]
+    WH -->|200 OK| DONE["Delivered ✓"]
+    WH -->|5xx| RT["Retry Queue"]
+    RT -->|exp backoff| D
+    RT -->|max retries| DL["Dead Letter Queue"]
+    style EV fill:#4f46e5,stroke:#4f46e5,color:white
+    style DONE fill:#10B981,stroke:#10B981,color:white
+    style DL fill:#dc2626,stroke:#dc2626,color:white
+  </div>
+  <br>
+  <ul>
+    <li class="fragment"><strong>Notify pattern</strong> — delivery in &lt;1 second</li>
+    <li class="fragment"><strong>Per-app queues</strong> — one slow app doesn't block others</li>
+    <li class="fragment"><strong>Exponential backoff</strong> — 1s, 2s, 4s, 8s, 16s, 32s</li>
+    <li class="fragment"><strong>Dead letter queue</strong> — inspect and replay failed events</li>
+  </ul>
+</section>
+
+<!-- Slide 35: Installation Types -->
+<section>
+  <h2>Installation Types</h2>
+  <br>
+  <table>
+    <tr><th>Type</th><th>Installed By</th><th>Scope</th><th>Events Received</th></tr>
+    <tr><td><span class="badge">PAGE</span></td><td>Page Admin</td><td>Single page</td><td>Posts, comments on that page</td></tr>
+    <tr><td><span class="badge badge-green">GROUP</span></td><td>Group Admin</td><td>Single group</td><td>Posts, comments, member changes</td></tr>
+    <tr><td><span class="badge badge-orange">USER</span></td><td>Any User</td><td>Personal</td><td>DMs, mentions, personal feed</td></tr>
+    <tr><td><span class="badge" style="background:#dc2626;">ORG</span></td><td>Tenant Admin</td><td>Entire org</td><td>All events (admin-level)</td></tr>
+  </table>
+  <br>
+  <div class="fragment">
+    <p style="font-size:0.8em;">Permission scoping ensures apps only see events within their installation scope. An app installed on Group A never sees Group B events.</p>
+  </div>
+</section>
+
+<!-- Slide 36: Support Bot Demo -->
+<section>
+  <h2>&#x1F3AF; Demo: Support Bot</h2>
+  <br>
+  <div class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant WS as WorkSphere
+    participant SB as Support Bot
+    participant Q as Support Queue
+    U->>WS: "How do I reset my password?"
+    WS->>SB: message.created webhook
+    SB->>SB: FAQ matching (cosine similarity)
+    alt FAQ Match Found
+        SB->>WS: Auto-reply with answer
+        WS->>U: "Go to Settings > Security > Reset..."
+    else No Match
+        SB->>Q: Create support case
+        SB->>WS: "Case #1234 created, agent will reply soon"
+        WS->>U: Confirmation message
+    end
+  </div>
+  <br>
+  <p class="fragment small">Support Bot demonstrates: webhook handling, FAQ matching, API replies, and case management.</p>
+</section>
+
+<!-- Slide 37: Slash Commands Demo -->
+<section>
+  <h2>&#x2F;&#xFE0F; Slash Commands</h2>
+  <br>
+  <div class="two-col">
+    <div class="card">
+      <h3>/joke</h3>
+      <pre><code class="language-json">{
+  "command": "/joke",
+  "args": "",
+  "response": {
+    "type": "markdown",
+    "content": "Why do programmers
+prefer dark mode?\n\n
+Because light attracts bugs! 🪲"
+  }
+}</code></pre>
+    </div>
+    <div class="card card-accent">
+      <h3>/stock AAPL</h3>
+      <pre><code class="language-json">{
+  "command": "/stock",
+  "args": "AAPL",
+  "response": {
+    "type": "card",
+    "title": "AAPL - Apple Inc.",
+    "fields": [
+      {"label": "Price", "value": "$178.72"},
+      {"label": "Change", "value": "+1.23%"},
+      {"label": "Volume", "value": "52.3M"}
+    ]
+  }
+}</code></pre>
+    </div>
+  </div>
+  <br>
+  <p class="fragment small">Slash commands return structured Markdown card responses rendered natively in all clients.</p>
+</section>
+
+<!-- Slide 38: Building Your Own App -->
+<section>
+  <h2>&#x1F6E0;&#xFE0F; Build Your Own App</h2>
+  <br>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1em;">
+    <div class="card">
+      <h3>Step 1: Register</h3>
+      <pre style="font-size:0.6em;"><code class="language-bash">POST /api/apps
+{
+  "name": "My Bot",
+  "webhookUrl": "https://my.app/webhook",
+  "permissions": ["read:messages",
+                   "write:messages"]
+}</code></pre>
+    </div>
+    <div class="card card-accent">
+      <h3>Step 2: Install</h3>
+      <pre style="font-size:0.6em;"><code class="language-bash">POST /api/apps/{id}/install
+{
+  "type": "GROUP",
+  "targetId": 12345
+}</code></pre>
+    </div>
+    <div class="card" style="border-left-color:#f59e0b;">
+      <h3>Step 3: Handle Webhooks</h3>
+      <pre style="font-size:0.6em;"><code class="language-python">@app.post("/webhook")
+def handle(event: dict):
+    if event["type"] == "message.created":
+        reply(event["conversationId"],
+              f"Echo: {event['text']}")
+    return {"status": "ok"}</code></pre>
+    </div>
+    <div class="card" style="border-left-color:#dc2626;">
+      <h3>Step 4: Deploy</h3>
+      <pre style="font-size:0.6em;"><code class="language-bash"># Any language, any host
+docker build -t my-bot .
+docker run -p 8080:8080 my-bot
+
+# Or serverless
+aws lambda deploy ...</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: CLOSING -->
+<!-- ============================================================ -->
+
+<section data-background-gradient="linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)">
+  <p class="section-title">&#x1F3C1; Closing</p>
+  <p class="section-subtitle">Development experience and resources</p>
+</section>
+
+<!-- Slide 39: Development Experience -->
+<section>
+  <h2>&#x1F6E0;&#xFE0F; Development Experience</h2>
+  <br>
+  <div class="two-col">
+    <div>
+      <h3>Quick Start</h3>
+      <ul>
+        <li class="fragment"><code>./start-all.sh</code> — launches everything</li>
+        <li class="fragment"><code>--no-app</code> flag for IDE debugging</li>
+        <li class="fragment">Docker Compose for infrastructure</li>
+        <li class="fragment">Hot reload on frontend</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Testing</h3>
+      <ul>
+        <li class="fragment"><strong>125+ tests</strong> across the stack</li>
+        <li class="fragment">Integration tests with Testcontainers</li>
+        <li class="fragment">Tenant isolation tests</li>
+        <li class="fragment">WebSocket integration tests</li>
+      </ul>
+    </div>
+  </div>
+  <br>
+  <div class="fragment highlight-box">
+    <strong>IntelliJ Setup:</strong> Import as Gradle project &rarr; Run with <code>--no-app</code> &rarr; Attach debugger &rarr; Set breakpoints
+  </div>
+</section>
+
+<!-- Slide 40: Documentation -->
+<section>
+  <h2>&#x1F4DA; Documentation</h2>
+  <br>
+  <table>
+    <tr><th>Document</th><th>Contents</th></tr>
+    <tr><td>ARCHITECTURE.md</td><td>System overview, component diagram, data flow</td></tr>
+    <tr><td>SYSTEM_DESIGN.md</td><td>Detailed design decisions, trade-offs</td></tr>
+    <tr><td>MULTI_TENANT.md</td><td>Tenant isolation, branding, admin</td></tr>
+    <tr><td>APP_PLATFORM.md</td><td>App lifecycle, webhooks, permissions</td></tr>
+    <tr><td>DATA_PIPELINE.md</td><td>Kafka, Spark, Iceberg, Trino</td></tr>
+    <tr><td>FEED_RANKING.md</td><td>ML model, features, training pipeline</td></tr>
+    <tr><td>WEBSOCKET.md</td><td>Gateway design, protocol, scaling</td></tr>
+    <tr><td>AWS_DEPLOYMENT.md</td><td>CDK stacks, managed services, costs</td></tr>
+    <tr><td>MOBILE.md</td><td>iOS + Android app architecture</td></tr>
+  </table>
+</section>
+
+<!-- Slide 41: Thank You -->
+<section data-background-gradient="linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)">
+  <h1>Thank You</h1>
+  <br>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:2em; text-align:center;">
+    <div>
+      <h3>&#x1F517; Links</h3>
+      <p style="font-size:0.8em;">
+        GitHub Repository<br>
+        <code style="color:var(--accent);">github.com/org/worksphere</code>
+      </p>
+      <p style="font-size:0.8em;">
+        Documentation<br>
+        <code style="color:var(--accent);">docs.worksphere.io</code>
+      </p>
+    </div>
+    <div>
+      <h3>&#x1F4F1; QR Code</h3>
+      <div style="width:150px;height:150px;border:2px dashed var(--primary);border-radius:0.5em;display:flex;align-items:center;justify-content:center;margin:0 auto;color:var(--text-muted);font-size:0.7em;">QR Placeholder</div>
+    </div>
+  </div>
+  <br>
+  <div style="display:flex; justify-content:center; gap:0.5em; flex-wrap:wrap;">
+    <span class="badge">Spring Boot</span>
+    <span class="badge badge-green">React</span>
+    <span class="badge badge-orange">SwiftUI</span>
+    <span class="badge">Compose</span>
+    <span class="badge badge-green">Kafka</span>
+    <span class="badge badge-orange">Iceberg</span>
+    <span class="badge">Ollama</span>
+  </div>
+  <br>
+  <p class="small">WorkSphere &mdash; Enterprise Social Platform</p>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+// Initialize Reveal.js
+Reveal.initialize({
+  hash: true,
+  transition: 'fade',
+  transitionSpeed: 'default',
+  slideNumber: true,
+  plugins: [RevealHighlight],
+  width: 1280,
+  height: 720,
+}).then(() => {
+  // Initialize Mermaid after Reveal is ready
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#4f46e5',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#6366f1',
+      lineColor: '#94a3b8',
+      secondaryColor: '#10B981',
+      tertiaryColor: '#1e1b4b',
+      background: '#0f172a',
+      mainBkg: '#1e1b4b',
+      nodeBorder: '#6366f1',
+      clusterBkg: 'rgba(79,70,229,0.1)',
+      clusterBorder: '#4f46e5',
+      titleColor: '#e2e8f0',
+      edgeLabelBackground: '#1e1b4b',
+    },
+    flowchart: { curve: 'basis', padding: 15 },
+    sequence: { actorMargin: 50, mirrorActors: false },
+    fontSize: 14,
+  });
+
+  // Render all mermaid diagrams
+  const mermaidDivs = document.querySelectorAll('.mermaid');
+  mermaidDivs.forEach(async (el, i) => {
+    const graphDef = el.textContent;
+    el.textContent = '';
+    try {
+      const { svg } = await mermaid.render(`mermaid-${i}`, graphDef);
+      el.innerHTML = svg;
+    } catch (e) {
+      el.innerHTML = `<pre style="color:#f87171;font-size:0.6em;">${e.message}</pre>`;
+    }
+  });
+});
+</script>
+</body>
+</html>

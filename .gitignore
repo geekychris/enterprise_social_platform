@@ -28,6 +28,15 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# AI Support runtime data
+**/data/lucene-index/
+**/data/vectors/
+**/data/
+
+# Python cache
+**/__pycache__/
+*.pyc
+
 # Environment
 .env
 .env.local

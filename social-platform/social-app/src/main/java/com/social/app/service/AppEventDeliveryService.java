@@ -3,6 +3,7 @@ package com.social.app.service;
 import com.social.app.persistence.entity.AppEntity;
 import com.social.app.persistence.entity.AppEventEntity;
 import com.social.app.persistence.repository.AppEventRepository;
+import com.social.app.persistence.repository.AppInstallationRepository;
 import com.social.app.persistence.repository.AppRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -50,6 +51,7 @@ public class AppEventDeliveryService {
 
     private final AppEventRepository eventRepository;
     private final AppRepository appRepository;
+    private final AppInstallationRepository installationRepository;
     private final RestTemplate restTemplate;
 
     // Notification queue — when an event is queued, a signal is sent here
@@ -62,9 +64,11 @@ public class AppEventDeliveryService {
     private volatile boolean running = true;
 
     public AppEventDeliveryService(AppEventRepository eventRepository,
-                                    AppRepository appRepository) {
+                                    AppRepository appRepository,
+                                    AppInstallationRepository installationRepository) {
         this.eventRepository = eventRepository;
         this.appRepository = appRepository;
+        this.installationRepository = installationRepository;
         this.restTemplate = new RestTemplate();
         var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10_000);
@@ -170,11 +174,24 @@ public class AppEventDeliveryService {
     }
 
     private void deliverEvent(AppEntity app, AppEventEntity event) {
+        // Resolve the installation to get the correct targetId and type
+        long targetId = 0;
+        String installType = "PAGE";
+        if (event.getInstallationId() != null) {
+            var installation = installationRepository.findById(event.getInstallationId()).orElse(null);
+            if (installation != null) {
+                targetId = installation.getTargetId();
+                installType = installation.getInstallType() != null ? installation.getInstallType() : "PAGE";
+            }
+        }
+
         String envelope = String.format(
-            "{\"event\":\"%s\",\"timestamp\":\"%s\",\"installation\":{\"id\":%s,\"type\":\"PAGE\",\"targetId\":0},\"data\":{\"post\":%s}}",
+            "{\"event\":\"%s\",\"timestamp\":\"%s\",\"installation\":{\"id\":%s,\"type\":\"%s\",\"targetId\":%d},\"data\":{\"post\":%s}}",
             event.getEventType(),
             event.getCreatedAt() != null ? event.getCreatedAt().toString() : Instant.now().toString(),
             event.getInstallationId() != null ? event.getInstallationId().toString() : "0",
+            installType,
+            targetId,
             event.getPayload()
         );
 

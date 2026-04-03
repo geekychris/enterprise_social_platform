@@ -1,0 +1,43 @@
+server:
+  port: 8090
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ai_support
+    username: social
+    password: social_dev_password
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# AI Support configuration
+aisupport:
+  ollama:
+    base-url: http://localhost:11434
+    chat-model: llama3
+    embed-model: nomic-embed-text
+    embed-dimensions: 768
+  lucene:
+    index-dir: ./data/lucene-index
+  vectors:
+    storage-dir: ./data/vectors
+  social-app:
+    base-url: http://localhost:8080
+    api-key: ""  # Set after registration
+    app-id: ""   # Set after registration
+  crawler:
+    max-depth: 3
+    max-pages: 100
+    delay-ms: 1000
+    user-agent: "WorkSphere-AI-Support-Crawler/1.0"
+  qa:
+    max-context-tokens: 4000
+    direct-context-threshold: 3000  # If total knowledge < this, use direct injection
+    top-k-results: 5
+    confidence-threshold: 0.6  # Below this, suggest human help
