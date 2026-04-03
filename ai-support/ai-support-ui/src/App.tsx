@@ -684,45 +684,158 @@ function SolutionsTab() {
 }
 
 function MetricsTab() {
-  const { data: sets } = useQuery<any[]>({ queryKey: ['sets'], queryFn: () => api.get('/knowledge/sets').then(r => r.data) });
+  const { data: dashboard } = useQuery<any>({
+    queryKey: ['metrics-dashboard'],
+    queryFn: () => api.get('/metrics/dashboard').then(r => r.data),
+    refetchInterval: 10000,
+  });
+  const { data: methods } = useQuery<any[]>({
+    queryKey: ['metrics-methods'],
+    queryFn: () => api.get('/metrics/methods').then(r => r.data),
+  });
+  const { data: alerts } = useQuery<any[]>({
+    queryKey: ['metrics-alerts'],
+    queryFn: () => api.get('/metrics/alerts').then(r => r.data),
+    refetchInterval: 15000,
+  });
+  const { data: gaps } = useQuery<any[]>({
+    queryKey: ['metrics-gaps'],
+    queryFn: () => api.get('/metrics/gaps').then(r => r.data),
+  });
+  const qc = useQueryClient();
+  const ackAlert = useMutation({
+    mutationFn: (id: number) => api.post(`/metrics/alerts/${id}/acknowledge`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['metrics-alerts'] }),
+  });
+
+  if (!dashboard) return <div className="text-center py-10 text-gray-400">Loading metrics...</div>;
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Knowledge Set Metrics</h2>
-      <div className="grid grid-cols-2 gap-4">
-        {sets?.map((s: any) => <KSMetrics key={s.id} ks={s} />)}
+      {/* Key Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatBox label="Questions" value={dashboard.totalInteractions} sub={`${dashboard.totalInteractions24h ?? 0} today`} />
+        <StatBox label="Avg Confidence" value={`${Math.round((dashboard.avgConfidence ?? 0) * 100)}%`} />
+        <StatBox label="Escalated" value={dashboard.totalEscalated} sub={`${dashboard.escalationRate7d ?? 0}% rate (7d)`} />
+        <StatBox label="Avg Response" value={`${Math.round(dashboard.avgResponseMs ?? 0)}ms`} sub={`p95: ${Math.round(dashboard.p95ResponseMs ?? 0)}ms`} />
+        <StatBox label="Cache" value={dashboard.cacheEntries} sub={`${dashboard.cacheHits ?? 0} hits`} />
+        <StatBox label="Gaps" value={dashboard.openKnowledgeGaps} sub="need docs" color={dashboard.openKnowledgeGaps > 0 ? 'orange' : undefined} />
       </div>
+
+      {/* Alerts */}
+      {alerts && alerts.length > 0 && (
+        <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="px-4 py-3 bg-red-50 border-b font-semibold text-sm text-red-800 flex items-center justify-between">
+            <span>Alerts ({alerts.length})</span>
+          </div>
+          <div className="divide-y max-h-48 overflow-y-auto">
+            {alerts.map((a: any) => (
+              <div key={a.id} className="px-4 py-2.5 flex items-center gap-3">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  a.severity === 'CRITICAL' ? 'bg-red-100 text-red-700' :
+                  a.severity === 'WARNING' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                }`}>{a.severity}</span>
+                <span className="text-xs text-gray-500">{a.alert_type}</span>
+                <span className="text-sm text-gray-700 flex-1">{a.message}</span>
+                <button onClick={() => ackAlert.mutate(a.id)} className="text-xs text-indigo-500 hover:underline">Acknowledge</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Method Distribution + Per-KS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Methods */}
+        {methods && methods.length > 0 && (
+          <div className="bg-white rounded-lg border p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">QA Method Distribution (30d)</h3>
+            <div className="space-y-2">
+              {methods.map((m: any) => (
+                <div key={m.method} className="flex items-center gap-3">
+                  <span className="text-xs font-medium w-20">{m.method}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div className="bg-indigo-500 h-full rounded-full" style={{
+                      width: `${Math.round((m.count / Math.max(...methods.map((x: any) => x.count))) * 100)}%`
+                    }} />
+                  </div>
+                  <span className="text-xs text-gray-500 w-16 text-right">{m.count} ({Math.round(m.avg_confidence * 100)}%)</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Per-KS breakdown */}
+        {dashboard.perKnowledgeSet && (
+          <div className="bg-white rounded-lg border p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Per Knowledge Set</h3>
+            <div className="space-y-2">
+              {(dashboard.perKnowledgeSet as any[]).map((ks: any) => (
+                <div key={ks.id} className="flex items-center gap-3 text-sm">
+                  <span className="font-medium flex-1 truncate">{ks.name}</span>
+                  <span className="text-gray-500">{ks.question_count} Q</span>
+                  <span className="text-gray-400">{Math.round((ks.avg_confidence ?? 0) * 100)}%</span>
+                  {ks.escalated_count > 0 && <span className="text-orange-500">{ks.escalated_count} esc</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Knowledge Gaps */}
+      {gaps && gaps.length > 0 && (
+        <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="px-4 py-3 bg-orange-50 border-b font-semibold text-sm text-orange-800">
+            Knowledge Gaps ({gaps.length} unanswered topics)
+          </div>
+          <div className="divide-y max-h-64 overflow-y-auto">
+            {gaps.map((g: any) => (
+              <div key={g.id} className="px-4 py-2.5 flex items-center gap-3">
+                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-bold">{g.frequency}x</span>
+                <span className="text-sm text-gray-700 flex-1">{g.question}</span>
+                <span className="text-xs text-gray-400">
+                  {new Date(g.last_asked_at).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Daily Activity Chart */}
+      {dashboard.dailyActivity && (dashboard.dailyActivity as any[]).length > 0 && (
+        <div className="bg-white rounded-lg border p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Daily Activity (14d)</h3>
+          <div className="flex items-end gap-[2px] h-32">
+            {(dashboard.dailyActivity as any[]).map((d: any, i: number) => {
+              const max = Math.max(...(dashboard.dailyActivity as any[]).map((x: any) => x.questions || 0), 1);
+              const h = ((d.questions || 0) / max) * 100;
+              return (
+                <div key={i} className="flex-1 min-w-[8px] group relative flex flex-col justify-end h-full">
+                  <div className="bg-indigo-500 rounded-t opacity-80 hover:opacity-100" style={{ height: `${Math.max(h, 2)}%` }} />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-gray-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10">
+                    {d.day}: {d.questions} questions
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function KSMetrics({ ks }: { ks: any }) {
-  const { data } = useQuery({
-    queryKey: ['ks-detail', ks.id],
-    queryFn: () => api.get(`/knowledge/sets/${ks.id}`).then(r => r.data),
-  });
-
+function StatBox({ label, value, sub, color }: { label: string; value: any; sub?: string; color?: string }) {
   return (
-    <div className="bg-white rounded-lg border p-4">
-      <h3 className="font-semibold text-sm mb-3">{ks.name}</h3>
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="bg-gray-50 rounded p-2 text-center">
-          <div className="text-xl font-bold text-indigo-600">{data?.documentCount ?? '-'}</div>
-          <div className="text-xs text-gray-500">Documents</div>
-        </div>
-        <div className="bg-gray-50 rounded p-2 text-center">
-          <div className="text-xl font-bold text-indigo-600">{data?.chunkCount ?? '-'}</div>
-          <div className="text-xs text-gray-500">Chunks</div>
-        </div>
-        <div className="bg-gray-50 rounded p-2 text-center">
-          <div className="text-xl font-bold text-indigo-600">{data?.vectorCount ?? '-'}</div>
-          <div className="text-xs text-gray-500">Vectors</div>
-        </div>
-        <div className="bg-gray-50 rounded p-2 text-center">
-          <div className="text-xl font-bold text-indigo-600">{data?.totalTokens ? Math.round(data.totalTokens / 1000) + 'K' : '-'}</div>
-          <div className="text-xs text-gray-500">Tokens</div>
-        </div>
+    <div className="bg-white rounded-lg border p-3 text-center">
+      <div className={`text-xl font-bold ${color === 'orange' ? 'text-orange-600' : 'text-indigo-600'}`}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
+      <div className="text-xs text-gray-500">{label}</div>
+      {sub && <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>}
     </div>
   );
 }

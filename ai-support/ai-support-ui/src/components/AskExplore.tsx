@@ -164,10 +164,20 @@ interface Citation {
 function ConversationCard({ conv, expanded, onToggleTrace }: {
   conv: ConversationItem; expanded: boolean; onToggleTrace: () => void;
 }) {
+  const [rated, setRated] = useState<number | null>(null);
   const { data: trace } = useQuery({
     queryKey: ['trace-detail', conv.traceId],
     queryFn: () => api.get(`/qa/traces/${conv.traceId}`).then(r => r.data),
     enabled: expanded && !!conv.traceId,
+  });
+
+  const rateMutation = useMutation({
+    mutationFn: (rating: number) => api.post('/qa/feedback', {
+      interactionId: conv.interactionId,
+      rating,
+      comment: rating >= 4 ? 'Helpful' : 'Not helpful'
+    }),
+    onSuccess: (_, rating) => setRated(rating),
   });
 
   const toolSteps = (conv.steps ?? []).filter(s => s.tool !== 'none');
@@ -232,6 +242,19 @@ function ConversationCard({ conv, expanded, onToggleTrace }: {
         <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px]">{conv.method}</span>
         {conv.suggestHuman && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px]">Suggests human help</span>}
         {toolSteps.length > 0 && <span className="text-[10px] text-gray-400">{toolSteps.length} search{toolSteps.length > 1 ? 'es' : ''}</span>}
+        {/* Feedback buttons */}
+        {conv.interactionId && (
+          <div className="flex gap-1">
+            <button onClick={() => rateMutation.mutate(5)} disabled={rated !== null}
+              className={`px-1.5 py-0.5 rounded text-xs transition-colors ${rated === 5 ? 'bg-green-500 text-white' : rated !== null ? 'bg-gray-100 text-gray-300' : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700'}`}>
+              👍
+            </button>
+            <button onClick={() => rateMutation.mutate(1)} disabled={rated !== null}
+              className={`px-1.5 py-0.5 rounded text-xs transition-colors ${rated === 1 ? 'bg-red-500 text-white' : rated !== null ? 'bg-gray-100 text-gray-300' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}`}>
+              👎
+            </button>
+          </div>
+        )}
         <div className="flex-1" />
         {conv.citations && conv.citations.length > 0 && (
           <span className="text-[10px] text-gray-400">Sources: {conv.citations.map(c => c.title).join(', ')}</span>
