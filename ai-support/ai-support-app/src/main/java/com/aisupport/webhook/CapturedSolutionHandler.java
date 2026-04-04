@@ -57,30 +57,11 @@ public class CapturedSolutionHandler {
             solution.setSourceUsername(authorName);
             solution.setSourceType(sourceType);
 
-            if (isTrusted) {
-                // Auto-promote solutions from support/admin users
-                solution.setStatus("AUTO_PROMOTED");
-                solution.setReviewedAt(OffsetDateTime.now());
-                solution.setReviewerNotes("Auto-promoted: from trusted support user " + authorName);
-                solution = capturedSolutionRepository.save(solution);
-
-                // Add to knowledge immediately
-                var doc = knowledgeService.addDocument(
-                        knowledgeSetId,
-                        "Support Answer by " + authorName + " (post " + postId + ")",
-                        content,
-                        null,
-                        "CURATED"
-                );
-                knowledgeService.indexDocument(doc.getId());
-                solution.setPromotedToDocumentId(doc.getId());
-                capturedSolutionRepository.save(solution);
-                log.info("Auto-promoted solution from {} to document {}", authorName, doc.getId());
-            } else {
-                // Queue for manual review
-                solution.setStatus("PENDING");
-                capturedSolutionRepository.save(solution);
-            }
+            // All solutions go to PENDING for review — trusted users are tagged for easy identification
+            solution.setStatus("PENDING");
+            solution.setReviewerNotes(isTrusted ? "From trusted support user — recommended for promotion" : null);
+            capturedSolutionRepository.save(solution);
+            log.info("Captured solution from {} ({}) as PENDING in ks-{}", authorName, sourceType, knowledgeSetId);
         }
     }
 
@@ -107,26 +88,10 @@ public class CapturedSolutionHandler {
         solution.setSourceUsername(authorName);
         solution.setSourceType(sourceType);
 
-        if (isTrusted) {
-            solution.setStatus("AUTO_PROMOTED");
-            solution.setReviewedAt(OffsetDateTime.now());
-            solution.setReviewerNotes("Auto-promoted: answer from trusted user " + authorName);
-            solution = capturedSolutionRepository.save(solution);
-
-            var doc = knowledgeService.addDocument(
-                    knowledgeSetId,
-                    "Answer by " + authorName + " (post " + postId + ")",
-                    content,
-                    null,
-                    "CURATED"
-            );
-            knowledgeService.indexDocument(doc.getId());
-            solution.setPromotedToDocumentId(doc.getId());
-            capturedSolutionRepository.save(solution);
-            log.info("Auto-promoted answer from {} to document {}", authorName, doc.getId());
-        } else {
-            solution.setStatus("PENDING");
-            capturedSolutionRepository.save(solution);
-        }
+        // All answers go to PENDING for review
+        solution.setStatus("PENDING");
+        solution.setReviewerNotes(isTrusted ? "From trusted support user — recommended for promotion" : null);
+        capturedSolutionRepository.save(solution);
+        log.info("Captured answer from {} ({}) as PENDING in ks-{}", authorName, sourceType, knowledgeSetId);
     }
 }

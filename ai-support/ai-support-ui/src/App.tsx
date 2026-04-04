@@ -649,7 +649,7 @@ function SolutionsTab() {
       <div className="flex gap-4 items-center">
         <h2 className="text-lg font-semibold">Community Solutions</h2>
         <div className="flex gap-2 text-xs">
-          {['PENDING', 'PROMOTED', 'DISMISSED'].map(s => (
+          {['PENDING', 'AUTO_PROMOTED', 'PROMOTED', 'DISMISSED'].map(s => (
             <button key={s} onClick={() => setStatus(s)}
               className={`px-3 py-1 rounded-full ${status === s ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
               {s} ({(stats as any)?.[s.toLowerCase()] ?? 0})
