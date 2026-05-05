@@ -67,5 +67,11 @@ spec:
   selector:
     app: kafka
   ports:
-    - port: 9092
+    - name: broker
+      port: 9092
       targetPort: 9092
+    # KRaft controller listener — required so the broker can register with the controller
+    # via the Service DNS name in combined mode (KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093).
+    - name: controller
+      port: 9093
+      targetPort: 9093
