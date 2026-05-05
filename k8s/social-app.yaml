@@ -5,10 +5,16 @@ metadata:
 spec:
   capacity:
     storage: 20Gi
+  # ReadWriteOnce: k3s/Rancher Desktop's local-path provisioner only supports RWO. Single pod
+  # consumes uploads anyway, so RWO is sufficient. The PVC binds statically to this PV via the
+  # empty storageClassName trick (skipping the dynamic local-path provisioner that can't fulfill).
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   hostPath:
-    path: ${WORKSPHERE_DATA_DIR}/uploads
+    # Literal path — yaml doesn't expand env vars. Adjust if you want this elsewhere on the host.
+    path: /tmp/worksphere/uploads
+    type: DirectoryOrCreate
+  storageClassName: ""
   persistentVolumeReclaimPolicy: Retain
 ---
 apiVersion: v1
@@ -18,10 +24,13 @@ metadata:
   namespace: worksphere
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 20Gi
+  # Empty storageClassName + matching capacity/access binds to the static uploads-pv above and
+  # bypasses the local-path provisioner (which would otherwise reject RWX).
+  storageClassName: ""
 ---
 apiVersion: apps/v1
 kind: Deployment
