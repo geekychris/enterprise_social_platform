@@ -29,7 +29,7 @@ metadata:
   name: social-app
   namespace: worksphere
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: social-app
