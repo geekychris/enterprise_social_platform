@@ -74,6 +74,7 @@ spec:
         description: List the test admin / tenant credentials from the seeded dataset
         command: bash scripts/devportal-fixture-emit.sh http://localhost:30080
         runIn: host
+        runOnApply: true
       # Re-runs the full seed-tenants.sh against a running social-app, then emits the credentials
       # via the same emit helper. Requires the cluster to be up (social-app reachable on :30002).
       - name: seed-tenants
