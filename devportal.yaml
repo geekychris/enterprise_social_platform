@@ -1,0 +1,39 @@
+apiVersion: devportal.io/v1
+kind: Asset
+metadata:
+  id: enterprise-social-platform
+  name: Enterprise Social Platform
+  description: |
+    Multi-module social platform: Spring Boot backend (social-platform/), React frontend
+    (social-platform/social-frontend), Python ML/datagen, AWS Lambdas, Airflow. The Java
+    backend talks to AOEE (separate portal-managed asset) for graph queries.
+  owner: geekychris
+  tags: [spring, react, postgres, opensearch, kafka, rust, social]
+spec:
+  type: service
+  language: java
+  build:
+    # Maven is the dominant tool; the build target does mvn + npm. The package and install
+    # commands cover the typical "what should I run before docker build?" use case.
+    tool: maven
+    commands:
+      build:   cd social-platform && mvn -DskipTests package
+      package: cd social-platform && mvn -DskipTests package
+      install: cd social-platform && mvn -DskipTests install
+      test:    cd social-platform && mvn test
+      clean:   cd social-platform && mvn clean
+      # Frontend lives under social-platform/social-frontend; build it independently when needed.
+      frontend-build: cd social-platform/social-frontend && npm install && npm run build
+  docker:
+    enabled: true
+  kubernetes:
+    enabled: true
+    # Manifest tree under k8s/ at the repo root. The cluster ships in the "worksphere"
+    # namespace as declared in those manifests; matches asset.k8sNamespace below so
+    # `kubectl apply -n <ns>` doesn't clash with `metadata.namespace: worksphere` in the YAML.
+    manifestPath: k8s
+    namespace: worksphere
+  runtime:
+    ports: []
+    # AOEE is a separate portal-managed asset; the build chain handles ordering via the
+    # kind=build edge, and the k8s composite-apply uses the kind=runtime edge.
