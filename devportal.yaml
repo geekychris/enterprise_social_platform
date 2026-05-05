@@ -51,14 +51,10 @@ spec:
       - tag: worksphere/spark-consumer:latest
         dockerfile: docker/spark-consumer/Dockerfile
         context: docker/spark-consumer
-      # AOEE images: setup-aoee.sh clones the AOEE repo into ./aoee/ and the Dockerfiles
-      # are expected at that location. If the dir is absent, these entries are skipped.
-      - tag: worksphere/aoee-server:latest
-        dockerfile: aoee/Dockerfile
-        context: aoee
-      - tag: worksphere/aoee-proxy:latest
-        dockerfile: aoee/Dockerfile.proxy
-        context: aoee
+      # AOEE images (worksphere/aoee-server, worksphere/aoee-proxy) are owned by the AOEE asset's
+      # own spec.docker.images. Pick them up by calling
+      # POST /api/assets/enterprise-social-platform/docker/build-images?include=runtime — the
+      # build chain walks the kind=runtime edge to AOEE first.
   kubernetes:
     enabled: true
     # Manifest tree under k8s/ at the repo root. The cluster ships in the "worksphere"
