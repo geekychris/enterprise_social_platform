@@ -54,6 +54,10 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            # The image's application.yml defaults to server.port=8088. The k8s container/Service
+            # are wired to 8080, so override here to keep the manifest's contract.
+            - name: SERVER_PORT
+              value: "8080"
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://postgres:5432/social_enterprise"
             - name: SPRING_DATASOURCE_USERNAME
