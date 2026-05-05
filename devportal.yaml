@@ -26,6 +26,39 @@ spec:
       frontend-build: cd social-platform/social-frontend && npm install && npm run build
   docker:
     enabled: true
+    # Local image build matrix consumed by the k8s manifests (each Deployment uses
+    # `imagePullPolicy: Never`, so these tags must exist in Rancher Desktop's image store).
+    # Run via POST /api/assets/enterprise-social-platform/docker/build-images.
+    images:
+      - tag: worksphere/social-app:latest
+        dockerfile: social-platform/Dockerfile
+        context: social-platform
+      - tag: worksphere/datagen:latest
+        dockerfile: social-platform/Dockerfile.datagen
+        context: social-platform
+      - tag: worksphere/frontend:latest
+        dockerfile: social-platform/social-frontend/Dockerfile
+        context: social-platform/social-frontend
+      - tag: worksphere/support-bot:latest
+        dockerfile: apps/support-bot/Dockerfile
+        context: apps/support-bot
+      - tag: worksphere/slash-commands:latest
+        dockerfile: apps/slash-commands/Dockerfile
+        context: apps/slash-commands
+      - tag: worksphere/ws-gateway:latest
+        dockerfile: social-platform/ws-gateway/Dockerfile
+        context: social-platform/ws-gateway
+      - tag: worksphere/spark-consumer:latest
+        dockerfile: docker/spark-consumer/Dockerfile
+        context: docker/spark-consumer
+      # AOEE images: setup-aoee.sh clones the AOEE repo into ./aoee/ and the Dockerfiles
+      # are expected at that location. If the dir is absent, these entries are skipped.
+      - tag: worksphere/aoee-server:latest
+        dockerfile: aoee/Dockerfile
+        context: aoee
+      - tag: worksphere/aoee-proxy:latest
+        dockerfile: aoee/Dockerfile.proxy
+        context: aoee
   kubernetes:
     enabled: true
     # Manifest tree under k8s/ at the repo root. The cluster ships in the "worksphere"
