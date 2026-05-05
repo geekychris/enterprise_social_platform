@@ -66,3 +66,17 @@ spec:
     ports: []
     # AOEE is a separate portal-managed asset; the build chain handles ordering via the
     # kind=build edge, and the k8s composite-apply uses the kind=runtime edge.
+  test:
+    fixtures:
+      # Surfaces the canned test credentials baked into scripts/seed-tenants-output.json so the
+      # dev_portal Fixtures tab can show "what's the admin login" without re-running the seeder.
+      - name: show-accounts
+        description: List the test admin / tenant credentials from the seeded dataset
+        command: bash scripts/devportal-fixture-emit.sh http://localhost:30080
+        runIn: host
+      # Re-runs the full seed-tenants.sh against a running social-app, then emits the credentials
+      # via the same emit helper. Requires the cluster to be up (social-app reachable on :30002).
+      - name: seed-tenants
+        description: Provision 3 demo tenants with admin users (requires social-app running)
+        command: bash scripts/seed-tenants.sh http://localhost:30002 && bash scripts/devportal-fixture-emit.sh http://localhost:30080
+        runIn: host
