@@ -67,8 +67,8 @@ spec:
     # AOEE is a separate portal-managed asset; the build chain handles ordering via the
     # kind=build edge, and the k8s composite-apply uses the kind=runtime edge.
     proxy:
-      path: /enterprise-social-platform
-      portSlot: http
+      portSlot: web
+      host: esp.hitorro.com
   test:
     fixtures:
       # Surfaces the canned test credentials baked into scripts/seed-tenants-output.json so the
