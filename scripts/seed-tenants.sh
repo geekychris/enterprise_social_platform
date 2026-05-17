@@ -523,7 +523,7 @@ done | sort
 echo ""
 
 # Save summary to file
-SUMMARY_FILE="/Users/chris/code/claude_world/social_enterprise/scripts/seed-tenants-output.json"
+SUMMARY_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/seed-tenants-output.json"
 python3 -c "
 import json, sys
 data = {
