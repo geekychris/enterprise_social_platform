@@ -13,7 +13,6 @@ spec:
   hostPath:
     # Literal path — yaml doesn't expand env vars. Adjust if you want this elsewhere on the host.
     path: /home/chris/data/worksphere/uploads
-    type: DirectoryOrCreate
   storageClassName: ""
   persistentVolumeReclaimPolicy: Retain
 ---
