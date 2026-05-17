@@ -19,6 +19,7 @@ spec:
       containers:
         - name: support-bot
           image: worksphere/support-bot:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 5050
           env:

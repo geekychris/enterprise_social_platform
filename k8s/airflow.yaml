@@ -100,7 +100,12 @@ spec:
             - bash
             - -c
             - |
-              pip install --no-cache-dir apache-airflow-providers-trino apache-airflow-providers-amazon trino
+              # Use the airflow 2.9.0 constraints file so pip doesn't upgrade airflow itself —
+              # without this, transitive deps pull airflow 3.x into ~/.local/bin and the system
+              # `airflow` shadow-shadows broken (results in `airflow: command not found`).
+              pip install --no-cache-dir \
+                --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.0/constraints-3.11.txt" \
+                apache-airflow-providers-trino apache-airflow-providers-amazon trino
               airflow db migrate
               airflow users create --role Admin --username admin --password worksphere \
                 --email admin@worksphere.local --firstname Admin --lastname User || true
@@ -116,7 +121,9 @@ spec:
             - bash
             - -c
             - |
-              pip install --no-cache-dir apache-airflow-providers-trino apache-airflow-providers-amazon trino
+              pip install --no-cache-dir \
+                --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.0/constraints-3.11.txt" \
+                apache-airflow-providers-trino apache-airflow-providers-amazon trino
               airflow webserver
           ports:
             - containerPort: 8080
@@ -179,7 +186,9 @@ spec:
             - bash
             - -c
             - |
-              pip install --no-cache-dir apache-airflow-providers-trino apache-airflow-providers-amazon trino
+              pip install --no-cache-dir \
+                --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.0/constraints-3.11.txt" \
+                apache-airflow-providers-trino apache-airflow-providers-amazon trino
               airflow scheduler
           envFrom:
             - configMapRef:

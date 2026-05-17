@@ -19,6 +19,7 @@ spec:
       containers:
         - name: slash-commands
           image: worksphere/slash-commands:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 5051
           env:

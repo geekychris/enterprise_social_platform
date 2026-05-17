@@ -75,7 +75,17 @@ spec:
       containers:
         - name: hive-metastore
           image: apache/hive:4.0.0
-          command: ["/opt/hive/bin/schematool", "-dbType", "derby", "-initSchema"]
+          # The original `command:` ran ONLY schema init and then exited (CrashLoop). Wrap so we
+          # initialize the Derby schema once and then defer to the image entrypoint, which reads
+          # SERVICE_NAME and starts the metastore daemon.
+          command:
+            - bash
+            - -c
+            - |
+              if [ ! -d /opt/hive/data/metastore_db ]; then
+                /opt/hive/bin/schematool -dbType derby -initSchema || true
+              fi
+              exec /entrypoint.sh
           ports:
             - containerPort: 9083
           env:
@@ -187,6 +197,7 @@ spec:
       containers:
         - name: spark-consumer
           image: worksphere/spark-consumer:latest
+          imagePullPolicy: Never
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"

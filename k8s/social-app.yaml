@@ -5,10 +5,16 @@ metadata:
 spec:
   capacity:
     storage: 20Gi
+  # ReadWriteOnce: k3s/Rancher Desktop's local-path provisioner only supports RWO. Single pod
+  # consumes uploads anyway, so RWO is sufficient. The PVC binds statically to this PV via the
+  # empty storageClassName trick (skipping the dynamic local-path provisioner that can't fulfill).
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   hostPath:
-    path: ${WORKSPHERE_DATA_DIR}/uploads
+    # Literal path — yaml doesn't expand env vars. Adjust if you want this elsewhere on the host.
+    path: /tmp/worksphere/uploads
+    type: DirectoryOrCreate
+  storageClassName: ""
   persistentVolumeReclaimPolicy: Retain
 ---
 apiVersion: v1
@@ -18,10 +24,13 @@ metadata:
   namespace: worksphere
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 20Gi
+  # Empty storageClassName + matching capacity/access binds to the static uploads-pv above and
+  # bypasses the local-path provisioner (which would otherwise reject RWX).
+  storageClassName: ""
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -29,7 +38,7 @@ metadata:
   name: social-app
   namespace: worksphere
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: social-app
@@ -45,6 +54,10 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            # The image's application.yml defaults to server.port=8088. The k8s container/Service
+            # are wired to 8080, so override here to keep the manifest's contract.
+            - name: SERVER_PORT
+              value: "8080"
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://postgres:5432/social_enterprise"
             - name: SPRING_DATASOURCE_USERNAME
@@ -110,8 +123,12 @@ metadata:
   name: social-app
   namespace: worksphere
 spec:
+  # NodePort so devportal's port registry can pin a stable host-accessible port (the renderer
+  # patches spec.ports[].nodePort from the k8s-nodeport reservation matching this slot name).
+  type: NodePort
   selector:
     app: social-app
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080

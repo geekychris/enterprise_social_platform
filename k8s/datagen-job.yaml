@@ -21,5 +21,7 @@ spec:
             - "--spring.datasource.username=social"
             - "--spring.datasource.password=social_dev_password"
             - "--datagen.aoee.base-url=http://aoee-proxy:8081"
-            - "--mode=${DATAGEN_MODE}"
+            # ${DATAGEN_MODE} placeholder didn't expand — kubectl doesn't substitute env in args.
+            # HUNDREDS = ~100 users / posts / comments etc. (THOUSANDS for the bigger fixture).
+            - "--mode=HUNDREDS"
             - "--aoee-sync=true"
