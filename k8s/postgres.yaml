@@ -8,7 +8,7 @@ spec:
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: ${WORKSPHERE_DATA_DIR}/postgres
+    path: /home/chris/data/worksphere/postgres
   persistentVolumeReclaimPolicy: Retain
 ---
 apiVersion: v1

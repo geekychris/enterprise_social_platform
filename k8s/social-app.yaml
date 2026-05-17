@@ -12,7 +12,7 @@ spec:
     - ReadWriteOnce
   hostPath:
     # Literal path — yaml doesn't expand env vars. Adjust if you want this elsewhere on the host.
-    path: /tmp/worksphere/uploads
+    path: /home/chris/data/worksphere/uploads
     type: DirectoryOrCreate
   storageClassName: ""
   persistentVolumeReclaimPolicy: Retain
@@ -24,7 +24,7 @@ metadata:
   namespace: worksphere
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 20Gi
