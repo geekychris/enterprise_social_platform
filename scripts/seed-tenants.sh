@@ -39,9 +39,20 @@ section() {
   echo ""
 }
 
-# Extract a field from JSON
+# Extract a field from JSON. On any error (missing python3, malformed JSON, bad path)
+# log a clear diagnostic to stderr and return empty on stdout — so callers see WHY
+# they got nothing instead of silently falling into the wrong fallback path.
 json_field() {
-  echo "$1" | python3 -c "import sys,json; print(json.load(sys.stdin)$2)" 2>/dev/null || echo ""
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "[json_field ERROR] python3 not on PATH — required for JSON extraction" >&2
+    return 0
+  fi
+  local out
+  if out=$(echo "$1" | python3 -c "import sys,json; print(json.load(sys.stdin)$2)" 2>&1); then
+    echo "$out"
+  else
+    echo "[json_field ERROR] extracting $2 — $out" >&2
+  fi
 }
 
 # Make a POST request, return body
