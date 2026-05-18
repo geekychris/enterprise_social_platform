@@ -29,9 +29,12 @@ spec:
   resources:
     requests:
       storage: 20Gi
-  # Empty storageClassName + matching capacity/access binds to the static uploads-pv above,
-  # bypassing the dynamic local-path provisioner.
+  # Empty storageClassName + explicit volumeName binds statically to uploads-pv above,
+  # bypassing the dynamic local-path provisioner. volumeName is recorded automatically
+  # by the controller post-bind, but it must be in the source manifest too — otherwise
+  # `kubectl apply` will try to clear it and fail (the field is immutable).
   storageClassName: ""
+  volumeName: uploads-pv
 ---
 apiVersion: apps/v1
 kind: Deployment
