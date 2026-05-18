@@ -224,7 +224,10 @@ spec:
           resources:
             requests:
               memory: "1Gi"
-              cpu: "500m"
+              # 100m so the pod schedules on small dev nodes (4-core mp4-style host
+              # already commits ~3.6 cores to other workloads in this stack). Limit
+              # stays at 1000m so spark-consumer can still burst while streaming.
+              cpu: "100m"
             limits:
               memory: "2Gi"
               cpu: "1000m"

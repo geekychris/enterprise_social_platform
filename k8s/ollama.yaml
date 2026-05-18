@@ -30,7 +30,10 @@ spec:
           resources:
             requests:
               memory: "2Gi"
-              cpu: "1000m"
+              # 250m so the pod schedules on small dev hosts (4-core mp4-style nodes
+              # share that CPU with social-app/aoee/airflow/kafka/postgres which already
+              # request ~3.6 cores). Limit stays at 4000m — ollama can still burst.
+              cpu: "250m"
             limits:
               memory: "4Gi"
               cpu: "4000m"
