@@ -1,0 +1,382 @@
+apiVersion: v1
+data:
+  entity_comment.json: |
+    {
+      "name": "EntityComment",
+      "log_type": "entity_comment",
+      "version": "1.0.0",
+      "description": "CDC events for comment entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-comments",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.comments_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "Comment ID"},
+        {"name": "post_id", "type": "long", "required": true, "description": "Parent post ID"},
+        {"name": "author_id", "type": "long", "required": true, "description": "Author user ID"},
+        {"name": "content", "type": "string", "required": false, "description": "Comment content"},
+        {"name": "parent_id", "type": "long", "required": false, "description": "Parent comment ID for nested replies"},
+        {"name": "depth", "type": "int", "required": false, "description": "Nesting depth"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_follow.json: |
+    {
+      "name": "EntityFollow",
+      "log_type": "entity_follow",
+      "version": "1.0.0",
+      "description": "CDC events for follow relationship changes",
+      "kafka": {
+        "topic": "worksphere-entity-follows",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.follows_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "follower_id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "follower_id", "type": "long", "required": true, "description": "Follower user ID"},
+        {"name": "followed_id", "type": "long", "required": true, "description": "Followed user ID"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_group.json: |
+    {
+      "name": "EntityGroup",
+      "log_type": "entity_group",
+      "version": "1.0.0",
+      "description": "CDC events for group entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-groups",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.groups_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "Group ID"},
+        {"name": "name", "type": "string", "required": true, "description": "Group name"},
+        {"name": "description", "type": "string", "required": false, "description": "Group description"},
+        {"name": "visibility", "type": "string", "required": false, "description": "PUBLIC, PRIVATE, etc"},
+        {"name": "owner_id", "type": "long", "required": true, "description": "Owner user ID"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_membership.json: |
+    {
+      "name": "EntityMembership",
+      "log_type": "entity_membership",
+      "version": "1.0.0",
+      "description": "CDC events for group membership changes",
+      "kafka": {
+        "topic": "worksphere-entity-memberships",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.memberships_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "user_id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "user_id", "type": "long", "required": true, "description": "Member user ID"},
+        {"name": "group_id", "type": "long", "required": true, "description": "Group ID"},
+        {"name": "role", "type": "string", "required": false, "description": "Membership role (admin, member, etc)"},
+        {"name": "status", "type": "string", "required": false, "description": "Membership status (active, pending, etc)"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_message.json: |
+    {
+      "name": "EntityMessage",
+      "log_type": "entity_message",
+      "version": "1.0.0",
+      "description": "CDC events for message entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-messages",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.messages_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "Message ID"},
+        {"name": "conversation_id", "type": "long", "required": true, "description": "Conversation ID"},
+        {"name": "sender_id", "type": "long", "required": true, "description": "Sender user ID"},
+        {"name": "content_length", "type": "int", "required": false, "description": "Length of message content (not actual content for privacy)"},
+        {"name": "has_attachment", "type": "boolean", "required": false, "description": "Whether message has an attachment"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_page.json: |
+    {
+      "name": "EntityPage",
+      "log_type": "entity_page",
+      "version": "1.0.0",
+      "description": "CDC events for page entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-pages",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.pages_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "Page ID"},
+        {"name": "name", "type": "string", "required": true, "description": "Page name"},
+        {"name": "description", "type": "string", "required": false, "description": "Page description"},
+        {"name": "visibility", "type": "string", "required": false, "description": "PUBLIC, PRIVATE, etc"},
+        {"name": "owner_id", "type": "long", "required": true, "description": "Owner user ID"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_post.json: |
+    {
+      "name": "EntityPost",
+      "log_type": "entity_post",
+      "version": "1.0.0",
+      "description": "CDC events for post entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-posts",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.posts_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "Post ID"},
+        {"name": "author_id", "type": "long", "required": true, "description": "Author user ID"},
+        {"name": "content", "type": "string", "required": false, "description": "Post content"},
+        {"name": "visibility", "type": "string", "required": false, "description": "PUBLIC, PRIVATE, etc"},
+        {"name": "target_type", "type": "string", "required": false, "description": "Target entity type"},
+        {"name": "target_id", "type": "long", "required": false, "description": "Target entity ID"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_reaction.json: |
+    {
+      "name": "EntityReaction",
+      "log_type": "entity_reaction",
+      "version": "1.0.0",
+      "description": "CDC events for reaction entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-reactions",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.reactions_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "Reaction ID"},
+        {"name": "user_id", "type": "long", "required": true, "description": "User who reacted"},
+        {"name": "target_id", "type": "long", "required": true, "description": "Target entity ID"},
+        {"name": "target_type", "type": "string", "required": true, "description": "Target entity type (post, comment, etc)"},
+        {"name": "reaction_type", "type": "string", "required": true, "description": "Reaction type (like, love, etc)"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  entity_user.json: |
+    {
+      "name": "EntityUser",
+      "log_type": "entity_user",
+      "version": "1.0.0",
+      "description": "CDC events for user entity changes",
+      "kafka": {
+        "topic": "worksphere-entity-users",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "warehouse.users_hourly",
+        "partition_by": ["tenant_id", "event_hour"],
+        "sort_by": ["event_timestamp", "id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "event_type", "type": "string", "required": true, "description": "CREATE, UPDATE, DELETE"},
+        {"name": "event_timestamp", "type": "timestamp", "required": true, "description": "When the change occurred"},
+        {"name": "event_hour", "type": "string", "required": true, "description": "Partition key YYYY-MM-DD-HH"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Event date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "id", "type": "long", "required": true, "description": "User ID"},
+        {"name": "username", "type": "string", "required": true, "description": "Username"},
+        {"name": "display_name", "type": "string", "required": false, "description": "Display name"},
+        {"name": "email", "type": "string", "required": false, "description": "Email"},
+        {"name": "avatar_url", "type": "string", "required": false, "description": "Avatar URL"},
+        {"name": "bio", "type": "string", "required": false, "description": "Bio text"},
+        {"name": "visibility", "type": "string", "required": false, "description": "PUBLIC, PRIVATE, etc"},
+        {"name": "is_admin", "type": "boolean", "required": false, "description": "Admin flag"},
+        {"name": "job_title", "type": "string", "required": false, "description": "Job title"},
+        {"name": "department", "type": "string", "required": false, "description": "Department"},
+        {"name": "manager_id", "type": "long", "required": false, "description": "Manager user ID"},
+        {"name": "location", "type": "string", "required": false, "description": "Location"},
+        {"name": "is_bot", "type": "boolean", "required": false, "description": "Bot flag"},
+        {"name": "created_at", "type": "string", "required": false, "description": "Entity creation time"}
+      ]
+    }
+  feed_impression.json: |
+    {
+      "name": "FeedImpression",
+      "log_type": "feed_impression",
+      "version": "1.0.0",
+      "description": "Tracks posts shown in user feeds with ranking features",
+      "kafka": {
+        "topic": "worksphere-feed-impressions",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "analytics.feed_impressions",
+        "partition_by": ["tenant_id", "event_date"],
+        "sort_by": ["timestamp", "user_id"],
+        "retention_days": 90
+      },
+      "fields": [
+        {"name": "timestamp", "type": "timestamp", "required": true, "description": "Event timestamp"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Partition date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "user_id", "type": "long", "required": true, "description": "Viewing user ID"},
+        {"name": "post_id", "type": "long", "required": true, "description": "Post shown"},
+        {"name": "author_id", "type": "long", "required": true, "description": "Post author ID"},
+        {"name": "position", "type": "int", "required": true, "description": "Position in feed (0-indexed)"},
+        {"name": "score", "type": "double", "required": false, "description": "Ranking score"},
+        {"name": "source", "type": "string", "required": true, "description": "ORGANIC, RECOMMENDED, TRENDING"},
+        {"name": "target_type", "type": "string", "required": false, "description": "GROUP_FEED, PAGE_FEED, etc"},
+        {"name": "target_id", "type": "long", "required": false, "description": "Group/page ID"},
+        {"name": "feat_engagement", "type": "double", "required": false, "description": "Feature: engagement score"},
+        {"name": "feat_recency_hours", "type": "double", "required": false, "description": "Feature: hours since posted"},
+        {"name": "feat_affinity", "type": "double", "required": false, "description": "Feature: author affinity score"},
+        {"name": "feat_reaction_count", "type": "int", "required": false, "description": "Feature: total reactions"},
+        {"name": "feat_comment_count", "type": "int", "required": false, "description": "Feature: total comments"},
+        {"name": "feat_author_follower_count", "type": "int", "required": false, "description": "Feature: author's follower count"},
+        {"name": "feat_is_recommended", "type": "boolean", "required": false, "description": "Feature: is recommended post"},
+        {"name": "feat_has_attachment", "type": "boolean", "required": false, "description": "Feature: has image/video"},
+        {"name": "feat_has_poll", "type": "boolean", "required": false, "description": "Feature: has poll"},
+        {"name": "feat_social_distance", "type": "int", "required": false, "description": "Feature: 1=following, 2=FOF, 3=other"}
+      ]
+    }
+  user_interaction.json: |
+    {
+      "name": "UserInteraction",
+      "log_type": "user_interaction",
+      "version": "1.0.0",
+      "description": "Tracks all user interactions: clicks, reactions, comments, messages, searches, profile views",
+      "kafka": {
+        "topic": "worksphere-user-interactions",
+        "partitions": 4,
+        "replication_factor": 1,
+        "retention_ms": 2592000000
+      },
+      "warehouse": {
+        "table_name": "analytics.user_interactions",
+        "partition_by": ["tenant_id", "event_date", "interaction_type"],
+        "sort_by": ["timestamp", "user_id"],
+        "retention_days": 180
+      },
+      "fields": [
+        {"name": "timestamp", "type": "timestamp", "required": true, "description": "Event timestamp"},
+        {"name": "event_date", "type": "date", "required": true, "description": "Partition date"},
+        {"name": "tenant_id", "type": "long", "required": false, "description": "Tenant ID for multi-tenant isolation"},
+        {"name": "user_id", "type": "long", "required": true, "description": "User performing action"},
+        {"name": "interaction_type", "type": "string", "required": true, "description": "FEED_CLICK, REACTION, COMMENT, MESSAGE_SENT, SEARCH, PROFILE_VIEW, BOT_INTERACTION, POLL_VOTE"},
+        {"name": "target_id", "type": "long", "required": false, "description": "Target entity ID (post, user, conversation)"},
+        {"name": "target_type", "type": "string", "required": false, "description": "POST, USER, CONVERSATION, GROUP, PAGE"},
+        {"name": "content_author_id", "type": "long", "required": false, "description": "Author of the content interacted with"},
+        {"name": "reaction_type", "type": "string", "required": false, "description": "LIKE, LOVE, HAHA, etc (for reactions)"},
+        {"name": "search_query", "type": "string", "required": false, "description": "Search query text"},
+        {"name": "search_result_count", "type": "int", "required": false, "description": "Number of search results"},
+        {"name": "message_has_attachment", "type": "boolean", "required": false, "description": "Message had attachment"},
+        {"name": "bot_context", "type": "string", "required": false, "description": "Bot interaction context"},
+        {"name": "bot_tools_used", "type": "string", "required": false, "description": "Comma-separated bot tools"},
+        {"name": "bot_response_time_ms", "type": "long", "required": false, "description": "Bot response latency"},
+        {"name": "group_id", "type": "long", "required": false, "description": "Group context if applicable"},
+        {"name": "page_id", "type": "long", "required": false, "description": "Page context if applicable"},
+        {"name": "device_type", "type": "string", "required": false, "description": "web, ios, android"},
+        {"name": "properties", "type": "map<string,string>", "required": false, "description": "Additional properties"}
+      ]
+    }
+kind: ConfigMap
+metadata:
+  name: log-configs
+  namespace: worksphere
