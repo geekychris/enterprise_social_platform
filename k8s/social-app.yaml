@@ -22,13 +22,15 @@ metadata:
   name: uploads-pvc
   namespace: worksphere
 spec:
+  # Match the PV above: k3s/Rancher Desktop's local-path provisioner only supports RWO,
+  # and only one pod (social-app) consumes uploads at a time, so RWO is sufficient.
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 20Gi
-  # Empty storageClassName + matching capacity/access binds to the static uploads-pv above and
-  # bypasses the local-path provisioner (which would otherwise reject RWX).
+  # Empty storageClassName + matching capacity/access binds to the static uploads-pv above,
+  # bypassing the dynamic local-path provisioner.
   storageClassName: ""
 ---
 apiVersion: apps/v1
